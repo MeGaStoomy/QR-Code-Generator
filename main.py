@@ -27,6 +27,8 @@ def reedSolomon(values):
             raise ValueError('x must be between 0 and 255 inclusive!')
     return p
 
+#this is a test addition to try and see how git works
+
 
 
 
