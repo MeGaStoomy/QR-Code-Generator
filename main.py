@@ -1,38 +1,23 @@
 import os, random
-
-EC = {'L':7,
-      'M':15,
-      'Q':25,
-      'H':30}
+from tkinter import *
 
 class QRCode:
-    def __init__(self, path):
-        with open(path, mode='r') as file:
-            self.contents = file.read()
+    def __init__(self):
+        main = Tk()
+        self.main = main
+        main.title("QR Code Generator")
+        main.configure(bg="#5a0088")
+        SCREENW = main.winfo_screenwidth()-10
+        SCREENH = main.winfo_screenheight()-10
+        HEIGHT = int(SCREENH*0.8)
+        WIDTH = int(SCREENW*0.6)
+        X = SCREENW//2-WIDTH//2
+        Y = SCREENH//2-HEIGHT//2-40
+        main.geometry(f"{WIDTH}x{HEIGHT}+{X}+{Y}")
+        self.area = Canvas(main, bg="white", height=HEIGHT-40, width=HEIGHT-40)
+        self.area.place(x=20, y=20)
 
-    def chooseMode(self):
-        pass
-
-
-def reedSolomon(values):
-    polynomial = ''
-    for n in range(len(values)):
-        polynomial += f'{values[n]}*x**{n}+'
-    polynomial = polynomial[:-1]
-    print(polynomial)
-    def p(x):
-        if 0 <= x <= 255:
-            return eval(polynomial)
-        else:
-            raise ValueError('x must be between 0 and 255 inclusive!')
-    return p
-
-#this is a test addition to try and see how git works
-
-
-
-
-
+qr = QRCode()
 
 
 
