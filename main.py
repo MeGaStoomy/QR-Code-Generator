@@ -14,6 +14,8 @@ from PyQt6.QtWidgets import (
     QPushButton,
     QLineEdit,
     QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
 )
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QPalette, QColor
@@ -44,9 +46,6 @@ class Window(QWidget):
     def usableHeight(self):
         '''Returns the height of the window excluding the top bar, AKA the "usable" height.'''
         return self.height()-self.topBar.height()
-
-    def test(self, event):
-        print('Top Bar was clicked!')
     
     def _setupWindow(self):
         '''Creates and sets up the window geometry'''
@@ -66,12 +65,11 @@ class Window(QWidget):
     def _createTopBar(self):
         '''Creates the custom bar at the top of the window, with the buttons to control said window.'''
         self.topBar = TopBar(self)
-        self.topBar.setFixedSize(self.width(), 50)
-        self.topBar.move(0,0)
-        self.topBar.setStyleSheet("background-color: #160c1e;")
-        # The value usableHeight represents the height of the window,
-        # excluding the top bar created here, AKA the "usable" height.
-        
+        self.layout = QVBoxLayout()
+        self.layout.addWidget(self.topBar)
+        self.layout.setContentsMargins(0, 0, 0, 0)
+        self.layout.setSpacing(0)
+        self.setLayout(self.layout)
         
     def _calculateWindowGeometry(self):
         '''Creates some constants used for UI creation'''
@@ -83,10 +81,30 @@ class Window(QWidget):
         X = SCREENW//2-WIDTH//2
         Y = SCREENH//2-HEIGHT//2
         return SCREENW,SCREENH,HEIGHT,WIDTH,X,Y
-
+        
 class TopBar(QWidget):
     def __init__(self, parent):
         super().__init__(parent)
+        self.setStyleSheet("background-color: #160c1e;")
+        self.setFixedHeight(50)
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.clickPos = None
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.clickPos = event.globalPosition()
+            self.onClick()
+
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.clickPos = None
+            self.onRelease()
+
+    def onClick(self):
+        print(f'Clicked at {self.clickPos}')
+
+    def onRelease(self):
+        print('Released')
         
 
 if __name__ == '__main__':
