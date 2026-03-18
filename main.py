@@ -1,9 +1,12 @@
 """
 Done using no pre-made modules for qr code creation such as qrcode, pyqrcode, or other.
-Any and all classes for qr code creation were coded by myself, not copied from the internet.
-This was made as a proof of skill and knowledge.
+Any and all classes for qr code creation were coded by myself, only few snippets may have come from
+the internet, which were then adapted for this code specifically.
 
-Began on March 10th 2026
+This was made as a proof of skill and knowledge in both simple app making (with GUI), tinkering
+with data (creating the QR CODE itself), and general Python knowledge.
+
+Began on March 10th 2026.
 """
 
 import os
@@ -17,19 +20,23 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
     QHBoxLayout,
 )
+from PyQt6.QtGui import (
+    QPalette,
+    QColor,
+    QPainter,
+    QImage,
+)
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QPalette, QColor
 
 class Program:
+    '''Wrapper class for the window and application instances.'''
     def __init__(self):
-        '''Wrapper class for the window and application objects, containing the actual code of the script.'''
         self.app = Application()
         self.window = Window()
     def execute(self):
         '''Executes the program.'''
         self.window.show()
         self.app.exec()
-        print('test')
 
 class Application(QApplication):
     def __init__(self):
@@ -39,18 +46,16 @@ class Window(QWidget):
     def __init__(self):
         '''Initializes the UI for the application.'''
         super().__init__()
-        self._setupWindow()
+        self._setupWindowGeometry()
         self._setBackgroundColor((34, 19, 41))
-        self._createTopBar()
-
-    def usableHeight(self):
-        '''Returns the height of the window excluding the top bar, AKA the "usable" height.'''
-        return self.height()-self.topBar.height()
+        self._initLayout()
+        self.topBar = TopBar(self)
+        self._createWorkingAreaWidgets()
+        self._placeAllWidgets()
     
-    def _setupWindow(self):
-        '''Creates and sets up the window geometry'''
+    def _setupWindowGeometry(self):
+        '''Creates and sets up the window geometry.'''
         SCREENW,SCREENH,HEIGHT,WIDTH,X,Y = self._calculateWindowGeometry()
-        # The value fullHeight represents the height of the window, including the top bar created by _createTopBar().
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
         self.setGeometry(X,Y,WIDTH,HEIGHT)
 
@@ -62,17 +67,37 @@ class Window(QWidget):
         self.setPalette(palette)
         self.setAutoFillBackground(True)
 
-    def _createTopBar(self):
-        '''Creates the custom bar at the top of the window, with the buttons to control said window.'''
-        self.topBar = TopBar(self)
-        self.layout = QVBoxLayout()
-        self.layout.addWidget(self.topBar)
-        self.layout.setContentsMargins(0, 0, 0, 0)
-        self.layout.setSpacing(0)
-        self.setLayout(self.layout)
+    def _initLayout(self):
+        '''Initializes all the layouts that will automatically arrange all the widgets in the window.'''
+        self.outerLayout = QVBoxLayout()
+        self.outerLayout.setContentsMargins(0, 0, 0, 0)
+        self.outerLayout.setSpacing(0)
+        
+        self.workingAreaLayout = QHBoxLayout()
+        self.workingAreaLayout.setContentsMargins(0, 0, 0, 0)
+        self.workingAreaLayout.setSpacing(0)
+        
+        self.userInputLayout = QVBoxLayout()
+        self.userInputLayout.setContentsMargins(0, 0, 0, 0)
+        self.userInputLayout.setSpacing(0)
+
+    def _createWorkingAreaWidgets(self):
+        '''Creates the widgets that will make up the middle of the window, excluding the top bar, AKA the "Working Area".'''
+        self.titleLabel = QLabel(self)
+        self.titleLabel.setText("QR CODE GENERATOR")
+
+        
+        
+        self.QRCodeArea = QRWidget(self)
+        
+
+    def _placeAllWidgets(self):
+        '''Places all the widgets into their respective layouts/positions.'''
+        self.outerLayout.addWidget(self.topBar)
+        self.setLayout(self.outerLayout)
         
     def _calculateWindowGeometry(self):
-        '''Creates some constants used for UI creation'''
+        '''Creates some constants used for UI creation.'''
         availableSpace = self.screen().availableGeometry()
         SCREENW = availableSpace.width()
         SCREENH = availableSpace.height()
@@ -81,9 +106,15 @@ class Window(QWidget):
         X = SCREENW//2-WIDTH//2
         Y = SCREENH//2-HEIGHT//2
         return SCREENW,SCREENH,HEIGHT,WIDTH,X,Y
-        
+
+class QRWidget(QWidget):
+    def __init__(self, parent):
+        '''Initializes the widget that displays the QR Code.'''
+        super().__init__(parent)
+   
 class TopBar(QWidget):
     def __init__(self, parent):
+        '''Initializes the top bar widget.'''
         super().__init__(parent)
         self.setStyleSheet("background-color: #160c1e;")
         self.setFixedHeight(50)
@@ -91,21 +122,21 @@ class TopBar(QWidget):
         self.clickPos = None
 
     def mousePressEvent(self, event):
+        '''Triggered when the widget is clicked by the mouse.'''
         if event.button() == Qt.MouseButton.LeftButton:
-            self.clickPos = event.globalPosition()
-            self.onClick()
+            self.onClick(event)
+            print('miau')
 
     def mouseReleaseEvent(self, event):
+        '''Triggered when the widget is released from the mouse.'''
         if event.button() == Qt.MouseButton.LeftButton:
-            self.clickPos = None
-            self.onRelease()
+            self.onRelease(event)
 
-    def onClick(self):
-        print(f'Clicked at {self.clickPos}')
+    def onClick(self, event):
+        self.clickPos = event.globalPosition()
 
-    def onRelease(self):
-        print('Released')
-        
+    def onRelease(self, event):
+        self.clickPos = None
 
 if __name__ == '__main__':
     program = Program()
