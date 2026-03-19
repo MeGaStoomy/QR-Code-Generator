@@ -8,9 +8,9 @@ with data (creating the QR CODE itself), and general Python knowledge.
 
 Began on March 10th 2026.
 """
-
 import os
-import random
+import sys
+import ctypes
 from PyQt6.QtWidgets import (
     QApplication,
     QLabel,
@@ -28,15 +28,18 @@ from PyQt6.QtGui import (
     QPainter,
     QImage,
     QIcon,
+    QPixmap,
 )
 from PyQt6.QtCore import Qt, QSize
+
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 class Program:
     '''Wrapper class for the window and application instances.'''
     def __init__(self):
         self.app = Application()
         self.window = Window()
-    def execute(self):
+    def execute(self) -> None:
         '''Executes the program.'''
         self.window.show()
         self.app.exec()
@@ -52,17 +55,33 @@ class Window(QWidget):
         self._setupWindowGeometry()
         self._setBackgroundColor((34, 19, 41))
         self._initLayout()
-        self.topBar = TopBar(self)
+        self.titleBar = TitleBar(self)
         self._createWorkingAreaWidgets()
         self._placeAllWidgets()
+        self._stylizeWidgets()
     
-    def _setupWindowGeometry(self):
+    def showEvent(self, event):
+        super().showEvent(event)
+        if sys.platform == "win32":
+            hwnd = int(self.winId())
+            DWMWA_WINDOW_CORNER_PREFERENCE = 33
+            DWMWCP_ROUND = 2
+            
+            ctypes.windll.dwmapi.DwmSetWindowAttribute(
+                hwnd,
+                DWMWA_WINDOW_CORNER_PREFERENCE,
+                ctypes.byref(ctypes.c_int(DWMWCP_ROUND)),
+                ctypes.sizeof(ctypes.c_int)
+            )
+    
+    def _setupWindowGeometry(self) -> None:
         '''Creates and sets up the window geometry.'''
-        SCREENW,SCREENH,HEIGHT,WIDTH,X,Y = self._calculateWindowGeometry()
+        HEIGHT,WIDTH,X,Y = self._calculateWindowGeometry()
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
+        #self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setGeometry(X,Y,WIDTH,HEIGHT)
 
-    def _setBackgroundColor(self, backgroundColor):
+    def _setBackgroundColor(self, backgroundColor: tuple[int, int, int]) -> None:
         '''Sets the color of the main window's background to the specified RGB color.'''
         palette = self.palette()
         color = QColor(*backgroundColor)
@@ -70,11 +89,15 @@ class Window(QWidget):
         self.setPalette(palette)
         self.setAutoFillBackground(True)
 
-    def _initLayout(self):
+    def _initLayout(self) -> None:
         '''Initializes all the layouts that will automatically arrange all the widgets in the window.'''
         self.outerLayout = QVBoxLayout()
         self.outerLayout.setContentsMargins(0, 0, 0, 0)
         self.outerLayout.setSpacing(0)
+
+        self.titleBarLayout = QHBoxLayout()
+        self.titleBarLayout.setContentsMargins(0, 0, 0, 0)
+        self.titleBarLayout.setSpacing(0)
         
         self.workingAreaLayout = QHBoxLayout()
         self.workingAreaLayout.setContentsMargins(0, 0, 0, 0)
@@ -94,9 +117,18 @@ class Window(QWidget):
 
         self.setLayout(self.outerLayout)
 
-    def _createWorkingAreaWidgets(self):
+    def _createWorkingAreaWidgets(self) -> None:
         '''Creates the widgets that will make up the middle of the window, excluding the top bar, AKA the "Working Area".'''
-        self.appTitle = QLabel("QR CODE GENERATOR")
+        icon_path = os.path.join(SCRIPT_DIR, "icon.ico")
+        self.appIcon = QLabel()
+        self.appIcon.setPixmap(QPixmap(icon_path))
+        self.appTitle = QLabel("QR Code Generator - Waiting")
+        self.appMinButton = QPushButton()
+        self.appWinButton = QPushButton()
+        self.appCloseButton = QPushButton()
+        self.appCloseButton.clicked.connect(self.close)
+
+        self.workingAreaTitle = QLabel("QR CODE GENERATOR")
 
         self.textEntryTitle = QLabel("Text :")
 
@@ -119,29 +151,40 @@ class Window(QWidget):
         self.mediumButton.setChecked(True)
 
         self.qrCode = QRWidget()
+        self.qrCode.setMinimumHeight(self.height()-100)
+        self.qrCode.setMinimumWidth(self.height()-100)
         
         self.generateButton = QPushButton("Generate")
         self.generateButton.setAutoDefault(False)
 
         self.clipboardButton = QPushButton()
         self.clipboardButton.setAutoDefault(False)
-        self.clipboardButton.setIcon(QIcon("copy.ico"))
+        icon_path = os.path.join(SCRIPT_DIR, "copy.ico")
+        self.clipboardButton.setIcon(QIcon(icon_path))
         self.clipboardButton.setIconSize(QSize(32, 32))
 
         self.downloadButton = QPushButton()
         self.downloadButton.setAutoDefault(False)
-        self.downloadButton.setIcon(QIcon("download.ico"))
+        icon_path = os.path.join(SCRIPT_DIR, "download.ico")
+        self.downloadButton.setIcon(QIcon(icon_path))
         self.downloadButton.setIconSize(QSize(32, 32))
 
-    def _placeAllWidgets(self):
+    def _placeAllWidgets(self) -> None:
         '''Places all the widgets into their respective layouts/positions.'''
-        self.outerLayout.addWidget(self.topBar)
+        self.outerLayout.addWidget(self.titleBar)
         self.outerLayout.addLayout(self.workingAreaLayout)
+
+        self.titleBar.setLayout(self.titleBarLayout)
+        self.titleBarLayout.addWidget(self.appIcon)
+        self.titleBarLayout.addWidget(self.appTitle)
+        self.titleBarLayout.addWidget(self.appMinButton)
+        self.titleBarLayout.addWidget(self.appWinButton)
+        self.titleBarLayout.addWidget(self.appCloseButton)
 
         self.workingAreaLayout.addLayout(self.userInputLayout)
         self.workingAreaLayout.addLayout(self.qrCodeLayout)
         
-        self.userInputLayout.addWidget(self.appTitle)
+        self.userInputLayout.addWidget(self.workingAreaTitle)
         self.userInputLayout.addWidget(self.textEntryTitle)
         self.userInputLayout.addWidget(self.textEntry)
         self.userInputLayout.addWidget(self.eccButtonGroupTitle)
@@ -156,8 +199,12 @@ class Window(QWidget):
         self.qrCodeButtonsLayout.addWidget(self.generateButton)
         self.qrCodeButtonsLayout.addWidget(self.clipboardButton)
         self.qrCodeButtonsLayout.addWidget(self.downloadButton)
+    
+    def _stylizeWidgets(self) -> None:
+        '''Applies all of the style to all the widgets'''
+        pass
         
-    def _calculateWindowGeometry(self):
+    def _calculateWindowGeometry(self) -> tuple[int,int,int,int]:
         '''Creates some constants used for UI creation.'''
         availableSpace = self.screen().availableGeometry()
         SCREENW = availableSpace.width()
@@ -166,7 +213,7 @@ class Window(QWidget):
         WIDTH = int(SCREENW*0.7)
         X = SCREENW//2-WIDTH//2
         Y = SCREENH//2-HEIGHT//2
-        return SCREENW,SCREENH,HEIGHT,WIDTH,X,Y
+        return HEIGHT,WIDTH,X,Y
 
 class QRWidget(QWidget):
     def __init__(self):
@@ -174,7 +221,7 @@ class QRWidget(QWidget):
         super().__init__()
         self.text = ''
    
-class TopBar(QWidget):
+class TitleBar(QWidget):
     def __init__(self, parent):
         '''Initializes the top bar widget.'''
         super().__init__(parent)
@@ -187,7 +234,6 @@ class TopBar(QWidget):
         '''Triggered when the widget is clicked by the mouse.'''
         if event.button() == Qt.MouseButton.LeftButton:
             self.onClick(event)
-            print('miau')
 
     def mouseReleaseEvent(self, event):
         '''Triggered when the widget is released from the mouse.'''
@@ -203,22 +249,3 @@ class TopBar(QWidget):
 if __name__ == '__main__':
     program = Program()
     program.execute()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
