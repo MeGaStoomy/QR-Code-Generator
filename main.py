@@ -15,7 +15,9 @@ from PyQt6.QtWidgets import (
     QApplication,
     QLabel,
     QPushButton,
-    QLineEdit,
+    QRadioButton,
+    QButtonGroup,
+    QPlainTextEdit,
     QWidget,
     QVBoxLayout,
     QHBoxLayout,
@@ -25,8 +27,9 @@ from PyQt6.QtGui import (
     QColor,
     QPainter,
     QImage,
+    QIcon,
 )
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QSize
 
 class Program:
     '''Wrapper class for the window and application instances.'''
@@ -81,20 +84,78 @@ class Window(QWidget):
         self.userInputLayout.setContentsMargins(0, 0, 0, 0)
         self.userInputLayout.setSpacing(0)
 
+        self.qrCodeLayout = QVBoxLayout()
+        self.qrCodeLayout.setContentsMargins(0, 0, 0, 0)
+        self.qrCodeLayout.setSpacing(0)
+
+        self.qrCodeButtonsLayout = QHBoxLayout()
+        self.qrCodeButtonsLayout.setContentsMargins(0, 0, 0, 0)
+        self.qrCodeButtonsLayout.setSpacing(0)
+
+        self.setLayout(self.outerLayout)
+
     def _createWorkingAreaWidgets(self):
         '''Creates the widgets that will make up the middle of the window, excluding the top bar, AKA the "Working Area".'''
-        self.titleLabel = QLabel(self)
-        self.titleLabel.setText("QR CODE GENERATOR")
+        self.appTitle = QLabel("QR CODE GENERATOR")
 
+        self.textEntryTitle = QLabel("Text :")
+
+        self.textEntry = QPlainTextEdit()
+        self.textEntry.setPlaceholderText("Text to encode goes here...")
+        self.textEntry.setReadOnly(False)
+
+        self.eccButtonGroupTitle = QLabel("Error Correction Level :")
         
+        self.lowButton = QRadioButton("Level L (Low) : Up to 7% data recovery.")
+        self.mediumButton = QRadioButton("Level M (Medium) : Up to 15% data recovery.")
+        self.quartileButton = QRadioButton("Level Q (Quartile) : Up to 25% data recovery.")
+        self.highButton = QRadioButton("Level H (High) : Up to 30% data recovery.")
+
+        self.eccButtonGroup = QButtonGroup()
+        self.eccButtonGroup.addButton(self.lowButton, 1)
+        self.eccButtonGroup.addButton(self.mediumButton, 2)
+        self.eccButtonGroup.addButton(self.quartileButton, 3)
+        self.eccButtonGroup.addButton(self.highButton, 4)
+        self.mediumButton.setChecked(True)
+
+        self.qrCode = QRWidget()
         
-        self.QRCodeArea = QRWidget(self)
-        
+        self.generateButton = QPushButton("Generate")
+        self.generateButton.setAutoDefault(False)
+
+        self.clipboardButton = QPushButton()
+        self.clipboardButton.setAutoDefault(False)
+        self.clipboardButton.setIcon(QIcon("copy.ico"))
+        self.clipboardButton.setIconSize(QSize(32, 32))
+
+        self.downloadButton = QPushButton()
+        self.downloadButton.setAutoDefault(False)
+        self.downloadButton.setIcon(QIcon("download.ico"))
+        self.downloadButton.setIconSize(QSize(32, 32))
 
     def _placeAllWidgets(self):
         '''Places all the widgets into their respective layouts/positions.'''
         self.outerLayout.addWidget(self.topBar)
-        self.setLayout(self.outerLayout)
+        self.outerLayout.addLayout(self.workingAreaLayout)
+
+        self.workingAreaLayout.addLayout(self.userInputLayout)
+        self.workingAreaLayout.addLayout(self.qrCodeLayout)
+        
+        self.userInputLayout.addWidget(self.appTitle)
+        self.userInputLayout.addWidget(self.textEntryTitle)
+        self.userInputLayout.addWidget(self.textEntry)
+        self.userInputLayout.addWidget(self.eccButtonGroupTitle)
+        self.userInputLayout.addWidget(self.lowButton)
+        self.userInputLayout.addWidget(self.mediumButton)
+        self.userInputLayout.addWidget(self.quartileButton)
+        self.userInputLayout.addWidget(self.highButton)
+
+        self.qrCodeLayout.addWidget(self.qrCode)
+        self.qrCodeLayout.addLayout(self.qrCodeButtonsLayout)
+
+        self.qrCodeButtonsLayout.addWidget(self.generateButton)
+        self.qrCodeButtonsLayout.addWidget(self.clipboardButton)
+        self.qrCodeButtonsLayout.addWidget(self.downloadButton)
         
     def _calculateWindowGeometry(self):
         '''Creates some constants used for UI creation.'''
@@ -108,9 +169,10 @@ class Window(QWidget):
         return SCREENW,SCREENH,HEIGHT,WIDTH,X,Y
 
 class QRWidget(QWidget):
-    def __init__(self, parent):
+    def __init__(self):
         '''Initializes the widget that displays the QR Code.'''
-        super().__init__(parent)
+        super().__init__()
+        self.text = ''
    
 class TopBar(QWidget):
     def __init__(self, parent):
