@@ -21,6 +21,7 @@ from PyQt6.QtWidgets import (
     QWidget,
     QVBoxLayout,
     QHBoxLayout,
+    QGridLayout,
 )
 from PyQt6.QtGui import (
     QPalette,
@@ -53,7 +54,7 @@ class Window(QWidget):
         '''Initializes the UI for the application.'''
         super().__init__()
         self._setupWindowGeometry()
-        self._setBackgroundColor((34, 19, 41))
+        self._setBackgroundColor((26, 12, 32))
         self._initLayout()
         self.titleBar = TitleBar(self)
         self._createWorkingAreaWidgets()
@@ -111,7 +112,7 @@ class Window(QWidget):
         self.qrCodeLayout.setContentsMargins(0, 0, 0, 0)
         self.qrCodeLayout.setSpacing(0)
 
-        self.qrCodeButtonsLayout = QHBoxLayout()
+        self.qrCodeButtonsLayout = QGridLayout()
         self.qrCodeButtonsLayout.setContentsMargins(0, 0, 0, 0)
         self.qrCodeButtonsLayout.setSpacing(0)
 
@@ -196,9 +197,9 @@ class Window(QWidget):
         self.qrCodeLayout.addWidget(self.qrCode)
         self.qrCodeLayout.addLayout(self.qrCodeButtonsLayout)
 
-        self.qrCodeButtonsLayout.addWidget(self.generateButton)
-        self.qrCodeButtonsLayout.addWidget(self.clipboardButton)
-        self.qrCodeButtonsLayout.addWidget(self.downloadButton)
+        self.qrCodeButtonsLayout.addWidget(self.generateButton, 1, 1, 1, 2)
+        self.qrCodeButtonsLayout.addWidget(self.clipboardButton, 2, 1)
+        self.qrCodeButtonsLayout.addWidget(self.downloadButton, 2, 2)
     
     def _stylizeWidgets(self) -> None:
         '''Applies all of the style to all the widgets'''
