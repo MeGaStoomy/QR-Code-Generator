@@ -1,0 +1,5 @@
+<!-- sample rectangle -->
+<svg width="200" height="200" xmlns="http://www.w3.org/2000/svg">
+  <path d="M40,50 V150 Q40,160 50,160 H150 Q160,160 160,150 V50 Q160,40 150,40 H50 Q40,40 40,50" 
+  stroke="#d6a2ec" stroke-width="10" fill="transparent" stroke-linecap="round" />
+</svg>

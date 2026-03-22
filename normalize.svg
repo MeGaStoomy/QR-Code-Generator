@@ -1,0 +1,7 @@
+<!-- sample rectangle -->
+<svg width="200" height="200" xmlns="http://www.w3.org/2000/svg">
+  <path d="M40,70 L40,150 Q40,160 50,160 L130,160 Q140,160 140,150 L140,70 Q140,60 130,60 L50,60 Q40,60 40,70" 
+  stroke="#d6a2ec" stroke-width="10" fill="transparent" />
+  <path d="M60,60 L60,50 Q60,40 70,40 L150,40 Q160,40 160,50 L160,130 Q160,140 150,140 L140,140"
+  stroke="#d6a2ec" stroke-width="10" fill="transparent" stroke-linecap="round" />
+</svg>

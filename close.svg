@@ -1,0 +1,5 @@
+<!-- sample rectangle -->
+<svg width="200" height="200" xmlns="http://www.w3.org/2000/svg">
+  <line x1="50" y1="50" x2="150" y2="150" stroke="#d6a2ec" stroke-width="10" stroke-linecap="round" />
+  <line x1="50" y1="150" x2="150" y2="50" stroke="#d6a2ec" stroke-width="10" stroke-linecap="round" />
+</svg>
