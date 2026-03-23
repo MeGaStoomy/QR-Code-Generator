@@ -17,11 +17,11 @@ from PyQt6.QtWidgets import (
     QPushButton,
     QRadioButton,
     QButtonGroup,
-    QLineEdit,
+    QTextEdit,
     QWidget,
     QVBoxLayout,
     QHBoxLayout,
-    QGridLayout,
+    QSizePolicy,
 )
 from PyQt6.QtGui import (
     QPalette,
@@ -31,7 +31,12 @@ from PyQt6.QtGui import (
     QIcon,
     QPixmap,
 )
-from PyQt6.QtCore import Qt, QSize
+from PyQt6.QtCore import (
+    Qt, 
+    QSize, 
+    QPointF,
+)
+from math import floor, ceil
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -140,7 +145,7 @@ class Window(QWidget):
         self.qrCodeLayout.setContentsMargins(0, 0, 0, 0)
         self.qrCodeLayout.setSpacing(0)
 
-        self.qrCodeButtonsLayout = QGridLayout()
+        self.qrCodeButtonsLayout = QHBoxLayout()
         self.qrCodeButtonsLayout.setContentsMargins(0, 0, 0, 0)
         self.qrCodeButtonsLayout.setSpacing(0)
 
@@ -165,8 +170,9 @@ class Window(QWidget):
 
         self.textEntryTitle = QLabel("Text :")
 
-        self.textEntry = QLineEdit()
+        self.textEntry = QTextEdit()
         self.textEntry.setPlaceholderText("Text to encode goes here...")
+        self.textEntry.setAcceptRichText(False)
         self.textEntry.setReadOnly(False)
 
         self.eccButtonGroupTitle = QLabel("Error Correction Level :")
@@ -198,7 +204,6 @@ class Window(QWidget):
         '''Places all the widgets into their respective layouts/positions.'''
         self.outerLayout.addWidget(self.titleBar)
         self.outerLayout.addLayout(self.workingAreaLayout)
-        self.outerLayout.addStretch()
 
         self.titleBar.setLayout(self.titleBarLayout)
         self.titleBarLayout.addWidget(self.appIcon)
@@ -210,21 +215,27 @@ class Window(QWidget):
         self.workingAreaLayout.addLayout(self.userInputLayout)
         self.workingAreaLayout.addLayout(self.qrCodeLayout)
         
+        self.userInputLayout.addStretch()
         self.userInputLayout.addWidget(self.userInputTitle)
+        self.userInputLayout.addStretch()
         self.userInputLayout.addWidget(self.textEntryTitle)
         self.userInputLayout.addWidget(self.textEntry)
+        self.userInputLayout.addStretch()
         self.userInputLayout.addWidget(self.eccButtonGroupTitle)
         self.userInputLayout.addWidget(self.lowButton)
         self.userInputLayout.addWidget(self.mediumButton)
         self.userInputLayout.addWidget(self.quartileButton)
         self.userInputLayout.addWidget(self.highButton)
+        self.userInputLayout.addStretch()
 
+        self.qrCodeLayout.addStretch()
         self.qrCodeLayout.addWidget(self.qrCode)
         self.qrCodeLayout.addLayout(self.qrCodeButtonsLayout)
+        self.qrCodeLayout.addStretch()
 
-        self.qrCodeButtonsLayout.addWidget(self.generateButton, 1, 1, 1, 2)
-        self.qrCodeButtonsLayout.addWidget(self.copyButton, 2, 1)
-        self.qrCodeButtonsLayout.addWidget(self.downloadButton, 2, 2)
+        self.qrCodeButtonsLayout.addWidget(self.generateButton)
+        self.qrCodeButtonsLayout.addWidget(self.copyButton)
+        self.qrCodeButtonsLayout.addWidget(self.downloadButton)
     
     def _stylizeWidgets(self) -> None:
         '''Applies all of the style to all the widgets'''
@@ -262,31 +273,41 @@ class Window(QWidget):
         self.appCloseButton.setFixedWidth(titleBarHeight+10)
         self.appCloseButton.setStyleSheet(QSS)
 
-        QSS = "QLabel { qproperty-alignment: AlignCenter; font-weight: bold; font-size: 30px; padding-top: 30px; padding-bottom: 15px; }"
+        QSS = "QLabel { qproperty-alignment: AlignCenter; font-weight: bold; font-size: 30px; padding-bottom: 15px; }"
         self.userInputTitle.setStyleSheet(QSS)
 
         QSS = "QLabel { qproperty-alignment: AlignCenter; font-size: 20px; padding-top: 15px; padding-bottom: 5px; }"
         self.textEntryTitle.setStyleSheet(QSS)
 
-        QSS = "QPlainTextEdit { font-style: bold; } QPlainTextEdit[placeholderText!=''] { font-style: italic; }"
+        QSS = "QTextEdit { font-style: bold; }"
+        self.textEntry.setMinimumHeight(20)
+        self.textEntry.setMaximumHeight(200)
+        policy = QSizePolicy()
+        #policy.setVerticalPolicy()
+        self.textEntry.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
         self.textEntry.setStyleSheet(QSS)
 
+        QSS = "QWidget { background-color: white; border: 10px solid #09050d; border-radius: 10px; margin-right: 10px; }"
         length = self.height()-200
         self.qrCode.setFixedSize(length, length)
-        QSS = "background-color: white; border: 10px solid #09050d; border-radius: 10px;"
         self.qrCode.setStyleSheet(QSS)
 
-        self.generateButton.setFixedSize(length, 50)
+        QSS = "QPushButton { background-color: red; }"
+        QSSmargin = "QPushButton { margin-right: 10px; }"
+        self.generateButton.setFixedSize(length-110, 50)
+        self.generateButton.setStyleSheet(QSS)
+        #self.generateButton.setStyleSheet(QSSmargin)
 
         icon_path = os.path.join(SCRIPT_DIR, "copy.svg")
         self.copyButton.setIcon(QIcon(icon_path))
         self.copyButton.setIconSize(QSize(32, 32))
-        self.copyButton.setFixedSize(length//2, 40)
+        self.copyButton.setFixedSize(50, 50)
+        
 
         icon_path = os.path.join(SCRIPT_DIR, "download.svg")
         self.downloadButton.setIcon(QIcon(icon_path))
         self.downloadButton.setIconSize(QSize(32, 32))
-        self.downloadButton.setFixedSize(length//2, 40)
+        self.downloadButton.setFixedSize(50, 50)
         
     def _calculateWindowGeometry(self) -> tuple[int,int,int,int]:
         '''Creates some constants used for UI creation.'''
@@ -311,7 +332,7 @@ class TitleBar(QWidget):
     def mousePressEvent(self, event) -> None:
         '''Triggered when the title bar is clicked by the mouse.'''
         if event.button() == Qt.MouseButton.LeftButton:
-            self.oldClickPos = event.globalPosition()
+            self.oldClickPos = event.position()
     
     def mouseReleaseEvent(self, event) -> None:
         if event.button() == Qt.MouseButton.LeftButton:
@@ -322,18 +343,25 @@ class TitleBar(QWidget):
         if self.oldClickPos:
             window = self.window()
             if (event.buttons() == Qt.MouseButton.LeftButton) and not(window.isMinimized()):
-                self.newClickPos = event.globalPosition()
                 if (window.isMaximized()) or (window.windowIsMaximized):
+                    widthCoef = self.oldClickPos.x() / self.width()
+                    heightCoef = self.oldClickPos.y() / self.height()
                     window.maximize(event)
-                    window.normalX = int(self.newClickPos.x() // 2)
-                    window.normalY = int(self.newClickPos.y() - self.height() // 2)
+                    self.oldClickPos = QPointF(self.width()*widthCoef, self.height()*heightCoef)
+                    window.normalX = int(self.oldClickPos.x())
+                    window.normalY = int(self.oldClickPos.y())
                     window.move(window.normalX, window.normalY)
+
+                    #window.normalX = int(self.newClickPos.x() // 2)
+                    #window.normalY = int(self.newClickPos.y() - self.height() // 2)
+                    #window.move(window.normalX, window.normalY)
                 else:
+                    self.newClickPos = event.position()
                     delta = self.newClickPos - self.oldClickPos
-                    window.normalX += int(delta.x())
-                    window.normalY += int(delta.y())
+                    x, y = delta.x(), delta.y()
+                    window.normalX += int(x)
+                    window.normalY += int(y)
                     window.move(window.normalX, window.normalY)
-                    self.oldClickPos = self.newClickPos
 
 class QRWidget(QWidget):
     def __init__(self):
