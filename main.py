@@ -382,24 +382,47 @@ class TitleBar(QWidget):
             window = self.window()
             if (event.buttons() == Qt.MouseButton.LeftButton) and not(window.isMinimized()):
                 if (window.isMaximized()) or (window.windowIsMaximized):
+                    delta = self._getDelta(event, window)
                     widthCoef = self.oldClickPos.x() / self.width()
                     heightCoef = self.oldClickPos.y() / self.height()
-                    window.maximize(event)
                     self.oldClickPos = QPointF(self.width()*widthCoef, self.height()*heightCoef)
-                    window.normalX = int(self.oldClickPos.x())
-                    window.normalY = int(self.oldClickPos.y())
+                    window.maximize(event)
+                    window.normalX = int(self.oldClickPos.x() + delta.x())
+                    window.normalY = int(self.oldClickPos.y() + delta.y())
                     window.move(window.normalX, window.normalY)
                 else:
-                    windowPos = window.pos()
-                    self.newClickPos = event.globalPosition() - QPointF(windowPos.x(), windowPos.y())
-                    delta = self.newClickPos - self.oldClickPos
-                    deltaX, deltaY = delta.x(), delta.y()
-                    if (-1 < deltaX < 1) or (deltaX > 200) or (-1 < deltaY < 1) or (deltaY > 200):
-                        self.newClickPos = event.position()
-                        delta = self.newClickPos - self.oldClickPos
+                    delta = self._getDelta(event, window)
                     window.normalX += int(delta.x())
                     window.normalY += int(delta.y())
+                    screen = self.screen().availableGeometry()
+                    screenWidth, screenHeight = screen.width(), screen.height()
+                    offSetX = self.newClickPos.x()
+                    offSetY = self.newClickPos.y()
+                    limitX = int(window.normalX - offSetX)
+                    limitY = int(window.normalY - offSetY)
+                    if limitX < 0:
+                        window.normalX = limitX
+                    elif limitX > screenWidth:
+                        window.normalX = screenWidth
+                    if limitY < 0:
+                        window.normalY = limitY
+                    elif limitY > screenHeight:
+                        window.normalY = screenHeight
                     window.move(window.normalX, window.normalY)
+
+    def _getDelta(self, event, window):
+        '''Helper method to get the distance moved by the mouse when mouseMoveEvent is triggered'''
+        windowPos = window.pos()
+        windowPos = QPointF(windowPos.x(), windowPos.y())
+        self.newClickPos = event.globalPosition() - windowPos
+        delta = self.newClickPos - self.oldClickPos
+        deltaX, deltaY = delta.x(), delta.y()
+        if (-1 < deltaX < 1) or (deltaX > 200) or (-1 < deltaY < 1) or (deltaY > 200):
+            self.newClickPos = event.position()
+            delta = self.newClickPos - self.oldClickPos
+        return delta
+
+
 
 class QRWidget(QWidget):
     def __init__(self):
