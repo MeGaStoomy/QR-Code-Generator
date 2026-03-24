@@ -63,9 +63,9 @@ class Window(QWidget):
         '''Initializes the UI for the application.'''
         super().__init__()
         self._setupWindowGeometry()
-        self._initLayout()
-        self.titleBar = TitleBar(self)
+        self._createTitleBarWidgets()
         self._createWorkingAreaWidgets()
+        self._initLayout()
         self._placeAllWidgets()
         self._setBackgroundColor((26, 12, 32))
         self._stylizeWidgets()
@@ -141,9 +141,11 @@ class Window(QWidget):
         self.userInputLayout.setContentsMargins(0, 0, 0, 0)
         self.userInputLayout.setSpacing(0)
 
-        self.qrCodeLayout = QVBoxLayout()
-        self.qrCodeLayout.setContentsMargins(0, 0, 0, 0)
-        self.qrCodeLayout.setSpacing(0)
+        self.qrCodeLayout = QWidget()
+        layout = QVBoxLayout()
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        self.qrCodeLayout.setLayout(layout)
 
         self.qrCodeButtonsLayout = QHBoxLayout()
         self.qrCodeButtonsLayout.setContentsMargins(0, 0, 0, 0)
@@ -151,8 +153,10 @@ class Window(QWidget):
 
         self.setLayout(self.outerLayout)
 
-    def _createWorkingAreaWidgets(self) -> None:
-        '''Creates the widgets that will make up the middle of the window, excluding the top bar, AKA the "Working Area".'''
+    def _createTitleBarWidgets(self) -> None:
+        '''Creates the title bar and the widgets that will make it up'''
+        self.titleBar = TitleBar(self)
+
         self.appIcon = QLabel()
 
         self.appTitle = QLabel("QR Code Generator - Waiting")
@@ -166,6 +170,10 @@ class Window(QWidget):
         self.appCloseButton = QPushButton()
         self.appCloseButton.clicked.connect(self.close)
 
+        self.outerLimiter = QWidget()
+
+    def _createWorkingAreaWidgets(self) -> None:
+        '''Creates the widgets that will make up the middle of the window, excluding the top bar, AKA the "Working Area".'''
         self.userInputTitle = QLabel("QR CODE GENERATOR")
 
         self.textEntryTitle = QLabel("Text :")
@@ -189,6 +197,8 @@ class Window(QWidget):
         self.eccButtonGroup.addButton(self.highButton, 4)
         self.mediumButton.setChecked(True)
 
+        self.workingAreaLimiter = QWidget()
+
         self.qrCode = QRWidget()
         
         self.generateButton = QPushButton("Generate")
@@ -203,6 +213,7 @@ class Window(QWidget):
     def _placeAllWidgets(self) -> None:
         '''Places all the widgets into their respective layouts/positions.'''
         self.outerLayout.addWidget(self.titleBar)
+        self.outerLayout.addWidget(self.outerLimiter)
         self.outerLayout.addLayout(self.workingAreaLayout)
 
         self.titleBar.setLayout(self.titleBarLayout)
@@ -213,7 +224,8 @@ class Window(QWidget):
         self.titleBarLayout.addWidget(self.appCloseButton)
 
         self.workingAreaLayout.addLayout(self.userInputLayout)
-        self.workingAreaLayout.addLayout(self.qrCodeLayout)
+        self.workingAreaLayout.addWidget(self.workingAreaLimiter)
+        self.workingAreaLayout.addWidget(self.qrCodeLayout)
         
         self.userInputLayout.addStretch()
         self.userInputLayout.addWidget(self.userInputTitle)
@@ -228,10 +240,11 @@ class Window(QWidget):
         self.userInputLayout.addWidget(self.highButton)
         self.userInputLayout.addStretch()
 
-        self.qrCodeLayout.addStretch()
-        self.qrCodeLayout.addWidget(self.qrCode)
-        self.qrCodeLayout.addLayout(self.qrCodeButtonsLayout)
-        self.qrCodeLayout.addStretch()
+        layout = self.qrCodeLayout.layout()
+        layout.addStretch()
+        layout.addWidget(self.qrCode)
+        layout.addLayout(self.qrCodeButtonsLayout)
+        layout.addStretch()
 
         self.qrCodeButtonsLayout.addWidget(self.generateButton)
         self.qrCodeButtonsLayout.addWidget(self.copyButton)
@@ -239,24 +252,22 @@ class Window(QWidget):
     
     def _stylizeWidgets(self) -> None:
         '''Applies all of the style to all the widgets'''
-        self.setStyleSheet("QWidget { font-family: bahnschrift; color: #d6a2ec; }")
+        titleBarHeight = self.titleBar.height()
 
-        self.titleBar.setStyleSheet("TitleBar { background-color: #09050d; }")
+        self.outerLimiter.setFixedHeight(1)
+        self.outerLimiter.setObjectName("limiter")
 
         icon_path = os.path.join(SCRIPT_DIR, "icon.svg")
         self.appIcon.setPixmap(QPixmap(icon_path).scaled(25, 25))
         self.appIcon.setContentsMargins(15,0,15,0)
         self.appIcon.setFixedWidth(60)
 
-        titleBarHeight = self.titleBar.height()
-        QSS = "QPushButton { border: none; } QPushButton:hover { background-color: #20162a; border: inherit; } QPushButton:pressed { background-color: #1a1222; }"
-
         icon_path = os.path.join(SCRIPT_DIR, "minimize.svg")
         self.appMinButton.setIcon(QIcon(icon_path))
         self.appMinButton.setIconSize(QSize(25, 25))
         self.appMinButton.setFixedHeight(titleBarHeight)
         self.appMinButton.setFixedWidth(titleBarHeight+10)
-        self.appMinButton.setStyleSheet(QSS)
+        self.appMinButton.setObjectName("appButton")
 
         self.maximizeIcon = QIcon(os.path.join(SCRIPT_DIR, "maximize.svg"))
         self.normalizeIcon = QIcon(os.path.join(SCRIPT_DIR, "normalize.svg"))
@@ -264,50 +275,76 @@ class Window(QWidget):
         self.appMaxButton.setIconSize(QSize(22, 22))
         self.appMaxButton.setFixedHeight(titleBarHeight)
         self.appMaxButton.setFixedWidth(titleBarHeight+10)
-        self.appMaxButton.setStyleSheet(QSS)
+        self.appMaxButton.setObjectName("appButton")
 
         icon_path = os.path.join(SCRIPT_DIR, "close.svg")
         self.appCloseButton.setIcon(QIcon(icon_path))
         self.appCloseButton.setIconSize(QSize(25, 25))
         self.appCloseButton.setFixedHeight(titleBarHeight)
         self.appCloseButton.setFixedWidth(titleBarHeight+10)
-        self.appCloseButton.setStyleSheet(QSS)
+        self.appCloseButton.setObjectName("appButton")
 
-        QSS = "QLabel { qproperty-alignment: AlignCenter; font-weight: bold; font-size: 30px; padding-bottom: 15px; }"
-        self.userInputTitle.setStyleSheet(QSS)
+        self.userInputLayout.setContentsMargins(20,20,20,20)
 
-        QSS = "QLabel { qproperty-alignment: AlignCenter; font-size: 20px; padding-top: 15px; padding-bottom: 5px; }"
+        self.workingAreaLimiter.setFixedWidth(2)
+        self.workingAreaLimiter.setObjectName("limiter")
+
+        self.qrCodeLayout.setContentsMargins(20,20,20,20)
+
+        self.userInputTitle.setObjectName("userInputTitle")
+
+        QSS = """
+        QLabel { 
+            qproperty-alignment: AlignCenter; 
+            font-size: 20px; 
+            padding-top: 15px; 
+            padding-bottom: 5px; 
+        }
+        """
         self.textEntryTitle.setStyleSheet(QSS)
 
-        QSS = "QTextEdit { font-style: bold; }"
+        QSS = """
+        QTextEdit { 
+            font-style: bold; 
+        }
+        """
         self.textEntry.setMinimumHeight(20)
         self.textEntry.setMaximumHeight(200)
         policy = QSizePolicy()
-        #policy.setVerticalPolicy()
         self.textEntry.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
         self.textEntry.setStyleSheet(QSS)
 
-        QSS = "QWidget { background-color: white; border: 10px solid #09050d; border-radius: 10px; margin-right: 10px; }"
+        QSS = """
+        QWidget { 
+            background-color: white; 
+            border: 10px solid #d6a2ec; 
+            border-radius: 20px; 
+        }
+        """
         length = self.height()-200
         self.qrCode.setFixedSize(length, length)
         self.qrCode.setStyleSheet(QSS)
 
-        QSS = "QPushButton { background-color: red; }"
-        QSSmargin = "QPushButton { margin-right: 10px; }"
+        QSS = """
+        QPushButton { 
+            background-color: red; 
+        }
+        """
         self.generateButton.setFixedSize(length-110, 50)
         self.generateButton.setStyleSheet(QSS)
-        #self.generateButton.setStyleSheet(QSSmargin)
 
         icon_path = os.path.join(SCRIPT_DIR, "copy.svg")
         self.copyButton.setIcon(QIcon(icon_path))
         self.copyButton.setIconSize(QSize(32, 32))
         self.copyButton.setFixedSize(50, 50)
-        
 
         icon_path = os.path.join(SCRIPT_DIR, "download.svg")
         self.downloadButton.setIcon(QIcon(icon_path))
         self.downloadButton.setIconSize(QSize(32, 32))
         self.downloadButton.setFixedSize(50, 50)
+
+        with open("QR Code Generator\\style.qss", mode="r", encoding="utf-8") as style:
+            self.setStyleSheet(style.read())
         
     def _calculateWindowGeometry(self) -> tuple[int,int,int,int]:
         '''Creates some constants used for UI creation.'''
@@ -356,11 +393,10 @@ class TitleBar(QWidget):
                     windowPos = window.pos()
                     self.newClickPos = event.globalPosition() - QPointF(windowPos.x(), windowPos.y())
                     delta = self.newClickPos - self.oldClickPos
-                    print(delta)
-                    if (-1 < delta.x() < 1) or (-1 < delta.y() < 1):
+                    deltaX, deltaY = delta.x(), delta.y()
+                    if (-1 < deltaX < 1) or (deltaX > 200) or (-1 < deltaY < 1) or (deltaY > 200):
                         self.newClickPos = event.position()
                         delta = self.newClickPos - self.oldClickPos
-                    delta = self.newClickPos - self.oldClickPos
                     window.normalX += int(delta.x())
                     window.normalY += int(delta.y())
                     window.move(window.normalX, window.normalY)

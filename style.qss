@@ -1,0 +1,32 @@
+* {
+    font-family: bahnschrift;
+    color: #d6a2ec;
+}
+
+TitleBar { 
+    background-color: #09050d; 
+}
+
+#userInputTitle { 
+    qproperty-alignment: AlignCenter; 
+    font-weight: bold; 
+    font-size: 30px; 
+    padding-bottom: 15px; 
+}
+
+#limiter { 
+    background-color: #3f2f4f
+}
+
+#appButton { 
+    border: none; 
+} 
+
+#appButton:hover { 
+    background-color: #20162a; 
+    border: inherit; 
+} 
+
+#appButton:pressed { 
+    background-color: #1a1222; 
+}
