@@ -335,6 +335,7 @@ class TitleBar(QWidget):
             self.oldClickPos = event.position()
     
     def mouseReleaseEvent(self, event) -> None:
+        '''Triggered when the title bar is released by the mouse.'''
         if event.button() == Qt.MouseButton.LeftButton:
             self.oldClickPos = None
     
@@ -351,16 +352,17 @@ class TitleBar(QWidget):
                     window.normalX = int(self.oldClickPos.x())
                     window.normalY = int(self.oldClickPos.y())
                     window.move(window.normalX, window.normalY)
-
-                    #window.normalX = int(self.newClickPos.x() // 2)
-                    #window.normalY = int(self.newClickPos.y() - self.height() // 2)
-                    #window.move(window.normalX, window.normalY)
                 else:
-                    self.newClickPos = event.position()
+                    windowPos = window.pos()
+                    self.newClickPos = event.globalPosition() - QPointF(windowPos.x(), windowPos.y())
                     delta = self.newClickPos - self.oldClickPos
-                    x, y = delta.x(), delta.y()
-                    window.normalX += int(x)
-                    window.normalY += int(y)
+                    print(delta)
+                    if (-1 < delta.x() < 1) or (-1 < delta.y() < 1):
+                        self.newClickPos = event.position()
+                        delta = self.newClickPos - self.oldClickPos
+                    delta = self.newClickPos - self.oldClickPos
+                    window.normalX += int(delta.x())
+                    window.normalY += int(delta.y())
                     window.move(window.normalX, window.normalY)
 
 class QRWidget(QWidget):
