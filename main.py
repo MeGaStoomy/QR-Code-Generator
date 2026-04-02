@@ -30,10 +30,12 @@ from PyQt6.QtGui import (
     QImage,
     QIcon,
     QPixmap,
+    QCursor,
 )
 from PyQt6.QtCore import (
     Qt, 
-    QSize, 
+    QSize,
+    QPoint,
     QPointF,
 )
 from math import floor, ceil
@@ -71,16 +73,16 @@ class Window(QWidget):
         self._stylizeWidgets()
     
     def maximize(self, event) -> None:
-        '''Triggered when appMaxButton is pressed'''
+        '''Triggered when TBMaxButton is pressed, or when the title bar is '''
         if (self.isMaximized()) or (self.windowIsMaximized):
             self.windowIsMaximized = False
             self.showNormal()
-            self.setGeometry(self.normalX, self.normalY ,self.normalWidth,self.normalHeight)
-            self.appMaxButton.setIcon(self.maximizeIcon)
+            self.setGeometry(self.normalPos.x(), self.normalPos.y(), self.normalWidth, self.normalHeight)
+            self.TBMaxButton.setIcon(self.maximizeIcon)
         else:
             self.windowIsMaximized = True
             self.showMaximized()
-            self.appMaxButton.setIcon(self.normalizeIcon)
+            self.TBMaxButton.setIcon(self.normalizeIcon)
         self.handleWindowEdges()
 
     def showEvent(self, event) -> None:
@@ -110,10 +112,10 @@ class Window(QWidget):
         self.gripSize = 8
         # This variable is used to remember whether the window was maximized or not after it gets minimized, as self.isMaximized() doesn't return the correct
         # value whenever the window is minimized while being maximized.
-        self.normalHeight,self.normalWidth,self.normalX,self.normalY = self._calculateWindowGeometry()
+        self.normalPos, self.normalWidth, self.normalHeight = self._calculateWindowGeometry()
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
         #self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        self.setGeometry(self.normalX,self.normalY,self.normalWidth,self.normalHeight)
+        self.setGeometry(self.normalPos.x(), self.normalPos.y(), self.normalWidth, self.normalHeight)
 
     def _setBackgroundColor(self, backgroundColor: tuple[int, int, int]) -> None:
         '''Sets the color of the main window's background to the specified RGB color.'''
@@ -161,14 +163,14 @@ class Window(QWidget):
 
         self.appTitle = QLabel("QR Code Generator - Waiting")
 
-        self.appMinButton = QPushButton()
-        self.appMinButton.clicked.connect(self.showMinimized)
+        self.TBMinButton = QPushButton()
+        self.TBMinButton.clicked.connect(self.showMinimized)
 
-        self.appMaxButton = QPushButton()
-        self.appMaxButton.clicked.connect(self.maximize)
+        self.TBMaxButton = QPushButton()
+        self.TBMaxButton.clicked.connect(self.maximize)
 
-        self.appCloseButton = QPushButton()
-        self.appCloseButton.clicked.connect(self.close)
+        self.TBCloseButton = QPushButton()
+        self.TBCloseButton.clicked.connect(self.close)
 
         self.outerLimiter = QWidget()
 
@@ -204,11 +206,11 @@ class Window(QWidget):
         self.generateButton = QPushButton("Generate")
         self.generateButton.setAutoDefault(False)
 
-        self.copyButton = QPushButton()
-        self.copyButton.setAutoDefault(False)
-
         self.downloadButton = QPushButton()
         self.downloadButton.setAutoDefault(False)
+
+        self.copyButton = QPushButton()
+        self.copyButton.setAutoDefault(False)
 
     def _placeAllWidgets(self) -> None:
         '''Places all the widgets into their respective layouts/positions.'''
@@ -219,9 +221,9 @@ class Window(QWidget):
         self.titleBar.setLayout(self.titleBarLayout)
         self.titleBarLayout.addWidget(self.appIcon)
         self.titleBarLayout.addWidget(self.appTitle)
-        self.titleBarLayout.addWidget(self.appMinButton)
-        self.titleBarLayout.addWidget(self.appMaxButton)
-        self.titleBarLayout.addWidget(self.appCloseButton)
+        self.titleBarLayout.addWidget(self.TBMinButton)
+        self.titleBarLayout.addWidget(self.TBMaxButton)
+        self.titleBarLayout.addWidget(self.TBCloseButton)
 
         self.workingAreaLayout.addLayout(self.userInputLayout)
         self.workingAreaLayout.addWidget(self.workingAreaLimiter)
@@ -247,8 +249,8 @@ class Window(QWidget):
         layout.addStretch()
 
         self.qrCodeButtonsLayout.addWidget(self.generateButton)
-        self.qrCodeButtonsLayout.addWidget(self.copyButton)
         self.qrCodeButtonsLayout.addWidget(self.downloadButton)
+        self.qrCodeButtonsLayout.addWidget(self.copyButton)
     
     def _stylizeWidgets(self) -> None:
         '''Applies all of the style to all the widgets'''
@@ -263,26 +265,26 @@ class Window(QWidget):
         self.appIcon.setFixedWidth(60)
 
         icon_path = os.path.join(SCRIPT_DIR, "minimize.svg")
-        self.appMinButton.setIcon(QIcon(icon_path))
-        self.appMinButton.setIconSize(QSize(25, 25))
-        self.appMinButton.setFixedHeight(titleBarHeight)
-        self.appMinButton.setFixedWidth(titleBarHeight+10)
-        self.appMinButton.setObjectName("appButton")
+        self.TBMinButton.setIcon(QIcon(icon_path))
+        self.TBMinButton.setIconSize(QSize(25, 25))
+        self.TBMinButton.setFixedHeight(titleBarHeight)
+        self.TBMinButton.setFixedWidth(titleBarHeight+10)
+        self.TBMinButton.setObjectName("titleBarButton")
 
         self.maximizeIcon = QIcon(os.path.join(SCRIPT_DIR, "maximize.svg"))
         self.normalizeIcon = QIcon(os.path.join(SCRIPT_DIR, "normalize.svg"))
-        self.appMaxButton.setIcon(self.maximizeIcon)
-        self.appMaxButton.setIconSize(QSize(22, 22))
-        self.appMaxButton.setFixedHeight(titleBarHeight)
-        self.appMaxButton.setFixedWidth(titleBarHeight+10)
-        self.appMaxButton.setObjectName("appButton")
+        self.TBMaxButton.setIcon(self.maximizeIcon)
+        self.TBMaxButton.setIconSize(QSize(22, 22))
+        self.TBMaxButton.setFixedHeight(titleBarHeight)
+        self.TBMaxButton.setFixedWidth(titleBarHeight+10)
+        self.TBMaxButton.setObjectName("titleBarButton")
 
         icon_path = os.path.join(SCRIPT_DIR, "close.svg")
-        self.appCloseButton.setIcon(QIcon(icon_path))
-        self.appCloseButton.setIconSize(QSize(25, 25))
-        self.appCloseButton.setFixedHeight(titleBarHeight)
-        self.appCloseButton.setFixedWidth(titleBarHeight+10)
-        self.appCloseButton.setObjectName("appButton")
+        self.TBCloseButton.setIcon(QIcon(icon_path))
+        self.TBCloseButton.setIconSize(QSize(25, 25))
+        self.TBCloseButton.setFixedHeight(titleBarHeight)
+        self.TBCloseButton.setFixedWidth(titleBarHeight+10)
+        self.TBCloseButton.setObjectName("titleBarButton")
 
         self.userInputLayout.setContentsMargins(20,20,20,20)
 
@@ -293,60 +295,38 @@ class Window(QWidget):
 
         self.userInputTitle.setObjectName("userInputTitle")
 
-        QSS = """
-        QLabel { 
-            qproperty-alignment: AlignCenter; 
-            font-size: 20px; 
-            padding-top: 15px; 
-            padding-bottom: 5px; 
-        }
-        """
-        self.textEntryTitle.setStyleSheet(QSS)
+        self.textEntryTitle.setObjectName("textEntryTitle")
 
-        QSS = """
-        QTextEdit { 
-            font-style: bold; 
-        }
-        """
         self.textEntry.setMinimumHeight(20)
         self.textEntry.setMaximumHeight(200)
-        policy = QSizePolicy()
         self.textEntry.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
-        self.textEntry.setStyleSheet(QSS)
 
-        QSS = """
-        QWidget { 
-            background-color: white; 
-            border: 10px solid #d6a2ec; 
-            border-radius: 20px; 
-        }
-        """
         length = self.height()-200
         self.qrCode.setFixedSize(length, length)
-        self.qrCode.setStyleSheet(QSS)
 
-        QSS = """
-        QPushButton { 
-            background-color: red; 
-        }
-        """
+        self.qrCodeButtonsLayout.setContentsMargins(0, 20, 0, 0)
+        
         self.generateButton.setFixedSize(length-110, 50)
-        self.generateButton.setStyleSheet(QSS)
-
-        icon_path = os.path.join(SCRIPT_DIR, "copy.svg")
-        self.copyButton.setIcon(QIcon(icon_path))
-        self.copyButton.setIconSize(QSize(32, 32))
-        self.copyButton.setFixedSize(50, 50)
+        self.generateButton.setObjectName("QRButton")
 
         icon_path = os.path.join(SCRIPT_DIR, "download.svg")
         self.downloadButton.setIcon(QIcon(icon_path))
         self.downloadButton.setIconSize(QSize(32, 32))
         self.downloadButton.setFixedSize(50, 50)
+        self.downloadButton.setObjectName("QRButton")
+        self.downloadButton.setProperty("size", "small")
 
-        with open("QR Code Generator\\style.qss", mode="r", encoding="utf-8") as style:
+        icon_path = os.path.join(SCRIPT_DIR, "copy.svg")
+        self.copyButton.setIcon(QIcon(icon_path))
+        self.copyButton.setIconSize(QSize(32, 32))
+        self.copyButton.setFixedSize(50, 50)
+        self.copyButton.setObjectName("QRButton")
+        self.copyButton.setProperty("style", "small")
+
+        with open(".\\style.qss", mode="r", encoding="utf-8") as style:
             self.setStyleSheet(style.read())
         
-    def _calculateWindowGeometry(self) -> tuple[int,int,int,int]:
+    def _calculateWindowGeometry(self) -> tuple[QPoint,int,int]:
         '''Creates some constants used for UI creation.'''
         availableSpace = self.screen().availableGeometry()
         SCREENW = availableSpace.width()
@@ -355,7 +335,7 @@ class Window(QWidget):
         WIDTH = int(SCREENW*0.7)
         X = SCREENW//2-WIDTH//2
         Y = SCREENH//2-HEIGHT//2
-        return HEIGHT,WIDTH,X,Y
+        return QPoint(X, Y), WIDTH, HEIGHT
    
 class TitleBar(QWidget):
     def __init__(self, parent):
@@ -369,58 +349,48 @@ class TitleBar(QWidget):
     def mousePressEvent(self, event) -> None:
         '''Triggered when the title bar is clicked by the mouse.'''
         if event.button() == Qt.MouseButton.LeftButton:
+            self.setMouseTracking(True)
             self.oldClickPos = event.position()
     
     def mouseReleaseEvent(self, event) -> None:
         '''Triggered when the title bar is released by the mouse.'''
         if event.button() == Qt.MouseButton.LeftButton:
+            self.setMouseTracking(False)
             self.oldClickPos = None
     
     def mouseMoveEvent(self, event) -> None:
         '''Triggered when the mouse moves over the title bar'''
-        if self.oldClickPos:
+        if not(self.oldClickPos == None):
             window = self.window()
             if (event.buttons() == Qt.MouseButton.LeftButton) and not(window.isMinimized()):
                 if (window.isMaximized()) or (window.windowIsMaximized):
-                    delta = self._getDelta(event, window)
-                    widthCoef = self.oldClickPos.x() / self.width()
-                    heightCoef = self.oldClickPos.y() / self.height()
-                    self.oldClickPos = QPointF(self.width()*widthCoef, self.height()*heightCoef)
+                    self.newClickPos = event.position()
+                    coefs: tuple[float, float] = (
+                        self.newClickPos.x()/window.width(), 
+                        self.newClickPos.y()/window.height()
+                    )
                     window.maximize(event)
-                    window.normalX = int(self.oldClickPos.x() + delta.x())
-                    window.normalY = int(self.oldClickPos.y() + delta.y())
-                    window.move(window.normalX, window.normalY)
+                    self.oldClickPos = QPointF(window.width()*coefs[0], window.height()*coefs[1])
+                    newPos = QCursor.pos() - self.oldClickPos.toPoint()
+                    window.normalPos = newPos
+                    window.move(window.normalPos.x(), window.normalPos.y())
                 else:
-                    delta = self._getDelta(event, window)
-                    window.normalX += int(delta.x())
-                    window.normalY += int(delta.y())
-                    screen = self.screen().availableGeometry()
-                    screenWidth, screenHeight = screen.width(), screen.height()
-                    offSetX = self.newClickPos.x()
-                    offSetY = self.newClickPos.y()
-                    limitX = int(window.normalX - offSetX)
-                    limitY = int(window.normalY - offSetY)
-                    if limitX < 0:
-                        window.normalX = limitX
-                    elif limitX > screenWidth:
-                        window.normalX = screenWidth
-                    if limitY < 0:
-                        window.normalY = limitY
-                    elif limitY > screenHeight:
-                        window.normalY = screenHeight
-                    window.move(window.normalX, window.normalY)
+                    self.newClickPos = event.position()
+                    mousePos = QCursor.pos()
+                    availableHeight = self.screen().availableGeometry().height()
+                    if (mousePos.y() > availableHeight):
+                        QCursor.setPos(mousePos.x(), availableHeight)
+                        self.newClickPos.setY(availableHeight)
+                    delta = self.newClickPos - self.oldClickPos
+                    newPos = window.normalPos + delta.toPoint()
+                    window.normalPos = newPos
+                    window.move(window.normalPos.x(), window.normalPos.y())
 
-    def _getDelta(self, event, window):
-        '''Helper method to get the distance moved by the mouse when mouseMoveEvent is triggered'''
-        windowPos = window.pos()
-        windowPos = QPointF(windowPos.x(), windowPos.y())
-        self.newClickPos = event.globalPosition() - windowPos
-        delta = self.newClickPos - self.oldClickPos
-        deltaX, deltaY = delta.x(), delta.y()
-        if (-1 < deltaX < 1) or (deltaX > 200) or (-1 < deltaY < 1) or (deltaY > 200):
-            self.newClickPos = event.position()
-            delta = self.newClickPos - self.oldClickPos
-        return delta
+    def mouseDoubleClickEvent(self, event) -> None:
+        '''Triggered when the title bar is double clicked by the mouse.'''
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.window().maximize(event)
+
 
 
 

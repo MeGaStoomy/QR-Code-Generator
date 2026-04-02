@@ -7,6 +7,29 @@ TitleBar {
     background-color: #09050d; 
 }
 
+QTextEdit { 
+    font-style: bold; 
+}
+
+QRWidget { 
+    background-color: white; 
+    border: 10px solid #d6a2ec; 
+    border-radius: 20px; 
+}
+
+#titleBarButton { 
+    border: none; 
+} 
+
+#titleBarButton:hover { 
+    background-color: #20162a; 
+    border: inherit; 
+} 
+
+#titleBarButton:pressed { 
+    background-color: #1a1222; 
+}
+
 #userInputTitle { 
     qproperty-alignment: AlignCenter; 
     font-weight: bold; 
@@ -14,19 +37,24 @@ TitleBar {
     padding-bottom: 15px; 
 }
 
+#textEntryTitle { 
+    qproperty-alignment: AlignCenter; 
+    font-size: 20px; 
+    padding-top: 15px; 
+    padding-bottom: 5px; 
+}
+
 #limiter { 
     background-color: #3f2f4f
 }
 
-#appButton { 
-    border: none; 
-} 
+#QRButton { 
+    background-color: rgb(45, 16, 58);
+    border-radius: 20px;
+    font-size: 20px;
+    font-weight: 900;
+}
 
-#appButton:hover { 
-    background-color: #20162a; 
-    border: inherit; 
-} 
-
-#appButton:pressed { 
-    background-color: #1a1222; 
+#QRButton[style="small"] {
+    border-radius: 90%;
 }
