@@ -34,12 +34,14 @@ from PyQt6.QtGui import (
 )
 from PyQt6.QtCore import (
     Qt, 
+    QThread,
+    pyqtSignal,
     QSize,
     QPoint,
     QPointF,
 )
-from math import floor, ceil
 
+global SCRIPT_DIR
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 class Program:
@@ -109,7 +111,6 @@ class Window(QWidget):
     def _setupWindowGeometry(self) -> None:
         '''Creates and sets up the window geometry.'''
         self.windowIsMaximized = False
-        self.gripSize = 8
         # This variable is used to remember whether the window was maximized or not after it gets minimized, as self.isMaximized() doesn't return the correct
         # value whenever the window is minimized while being maximized.
         self.normalPos, self.normalWidth, self.normalHeight = self._calculateWindowGeometry()
@@ -128,32 +129,24 @@ class Window(QWidget):
     def _initLayout(self) -> None:
         '''Initializes all the layouts that will automatically arrange all the widgets in the window.'''
         self.outerLayout = QVBoxLayout()
-        self.outerLayout.setContentsMargins(0, 0, 0, 0)
-        self.outerLayout.setSpacing(0)
 
         self.titleBarLayout = QHBoxLayout()
-        self.titleBarLayout.setContentsMargins(0, 0, 0, 0)
-        self.titleBarLayout.setSpacing(0)
         
         self.workingAreaLayout = QHBoxLayout()
-        self.workingAreaLayout.setContentsMargins(0, 0, 0, 0)
-        self.workingAreaLayout.setSpacing(0)
         
-        self.userInputLayout = QVBoxLayout()
-        self.userInputLayout.setContentsMargins(0, 0, 0, 0)
-        self.userInputLayout.setSpacing(0)
+        self.userInputLayout = QWidget()
+        self.userInputLayout.setLayout(QVBoxLayout())
+
+        self.textEntryLayout = QWidget()
+        self.textEntryLayout.setLayout(QVBoxLayout())
+
+        self.eccButtonLayout = QWidget()
+        self.eccButtonLayout.setLayout(QVBoxLayout())
 
         self.qrCodeLayout = QWidget()
-        layout = QVBoxLayout()
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
-        self.qrCodeLayout.setLayout(layout)
+        self.qrCodeLayout.setLayout(QVBoxLayout())
 
         self.qrCodeButtonsLayout = QHBoxLayout()
-        self.qrCodeButtonsLayout.setContentsMargins(0, 0, 0, 0)
-        self.qrCodeButtonsLayout.setSpacing(0)
-
-        self.setLayout(self.outerLayout)
 
     def _createTitleBarWidgets(self) -> None:
         '''Creates the title bar and the widgets that will make it up'''
@@ -178,6 +171,8 @@ class Window(QWidget):
         '''Creates the widgets that will make up the middle of the window, excluding the top bar, AKA the "Working Area".'''
         self.userInputTitle = QLabel("QR CODE GENERATOR")
 
+        self.firstLimiter = QWidget()
+
         self.textEntryTitle = QLabel("Text :")
 
         self.textEntry = QTextEdit()
@@ -185,23 +180,30 @@ class Window(QWidget):
         self.textEntry.setAcceptRichText(False)
         self.textEntry.setReadOnly(False)
 
+        self.secondLimiter = QWidget()
+
         self.eccButtonGroupTitle = QLabel("Error Correction Level :")
         
-        self.lowButton = QRadioButton("Level L (Low) : Up to 7% data recovery.")
-        self.mediumButton = QRadioButton("Level M (Medium) : Up to 15% data recovery.")
-        self.quartileButton = QRadioButton("Level Q (Quartile) : Up to 25% data recovery.")
-        self.highButton = QRadioButton("Level H (High) : Up to 30% data recovery.")
+        self.eccLowButton = QPushButton("Level L (Low) : Up to 7% data recovery.")
+        self.eccMediumButton = QPushButton("Level M (Medium) : Up to 15% data recovery.")
+        self.eccQuartileButton = QPushButton("Level Q (Quartile) : Up to 25% data recovery.")
+        self.eccHighButton = QPushButton("Level H (High) : Up to 30% data recovery.")
 
         self.eccButtonGroup = QButtonGroup()
-        self.eccButtonGroup.addButton(self.lowButton, 1)
-        self.eccButtonGroup.addButton(self.mediumButton, 2)
-        self.eccButtonGroup.addButton(self.quartileButton, 3)
-        self.eccButtonGroup.addButton(self.highButton, 4)
-        self.mediumButton.setChecked(True)
+        self.eccButtonGroup.addButton(self.eccLowButton, 1)
+        self.eccButtonGroup.addButton(self.eccMediumButton, 2)
+        self.eccButtonGroup.addButton(self.eccQuartileButton, 3)
+        self.eccButtonGroup.addButton(self.eccHighButton, 4)
+        for button in self.eccButtonGroup.buttons():
+            button.setCheckable(True)
+        self.eccMediumButton.setChecked(True)
 
         self.workingAreaLimiter = QWidget()
 
         self.qrCode = QRWidget()
+        self.qrCode.setLayout(QVBoxLayout())
+
+        self.qrCodeText = QLabel("Waiting for input...")
         
         self.generateButton = QPushButton("Generate")
         self.generateButton.setAutoDefault(False)
@@ -214,6 +216,8 @@ class Window(QWidget):
 
     def _placeAllWidgets(self) -> None:
         '''Places all the widgets into their respective layouts/positions.'''
+        self.setLayout(self.outerLayout)
+
         self.outerLayout.addWidget(self.titleBar)
         self.outerLayout.addWidget(self.outerLimiter)
         self.outerLayout.addLayout(self.workingAreaLayout)
@@ -225,39 +229,46 @@ class Window(QWidget):
         self.titleBarLayout.addWidget(self.TBMaxButton)
         self.titleBarLayout.addWidget(self.TBCloseButton)
 
-        self.workingAreaLayout.addLayout(self.userInputLayout)
+        self.workingAreaLayout.addWidget(self.userInputLayout)
         self.workingAreaLayout.addWidget(self.workingAreaLimiter)
         self.workingAreaLayout.addWidget(self.qrCodeLayout)
         
-        self.userInputLayout.addStretch()
-        self.userInputLayout.addWidget(self.userInputTitle)
-        self.userInputLayout.addStretch()
-        self.userInputLayout.addWidget(self.textEntryTitle)
-        self.userInputLayout.addWidget(self.textEntry)
-        self.userInputLayout.addStretch()
-        self.userInputLayout.addWidget(self.eccButtonGroupTitle)
-        self.userInputLayout.addWidget(self.lowButton)
-        self.userInputLayout.addWidget(self.mediumButton)
-        self.userInputLayout.addWidget(self.quartileButton)
-        self.userInputLayout.addWidget(self.highButton)
-        self.userInputLayout.addStretch()
+        userInputLayout = self.userInputLayout.layout()
+        userInputLayout.addWidget(self.userInputTitle)
+        userInputLayout.addWidget(self.firstLimiter)
+        userInputLayout.addWidget(self.textEntryLayout)
+        userInputLayout.addWidget(self.secondLimiter)
+        userInputLayout.addWidget(self.eccButtonLayout)
+        
+        textEntryLayout = self.textEntryLayout.layout()
+        textEntryLayout.addWidget(self.textEntryTitle)
+        textEntryLayout.addWidget(self.textEntry)
 
-        layout = self.qrCodeLayout.layout()
-        layout.addStretch()
-        layout.addWidget(self.qrCode)
-        layout.addLayout(self.qrCodeButtonsLayout)
-        layout.addStretch()
+        eccButtonLayout = self.eccButtonLayout.layout()
+        eccButtonLayout.addWidget(self.eccButtonGroupTitle)
+
+        for button in self.eccButtonGroup.buttons():
+            eccButtonLayout.addWidget(button)
+
+        qrCodeLayout = self.qrCodeLayout.layout()
+        qrCodeLayout.addWidget(self.qrCode)
+        qrCodeLayout.addLayout(self.qrCodeButtonsLayout)
+
+        self.qrCode.layout().addWidget(self.qrCodeText)
 
         self.qrCodeButtonsLayout.addWidget(self.generateButton)
         self.qrCodeButtonsLayout.addWidget(self.downloadButton)
         self.qrCodeButtonsLayout.addWidget(self.copyButton)
     
     def _stylizeWidgets(self) -> None:
-        '''Applies all of the style to all the widgets'''
+        '''Applies all of the style to all the widgets/layouts'''
         titleBarHeight = self.titleBar.height()
 
-        self.outerLimiter.setFixedHeight(1)
-        self.outerLimiter.setObjectName("limiter")
+        self.outerLayout.setContentsMargins(0, 0, 0, 0)
+        self.outerLayout.setSpacing(0)
+
+        self.titleBarLayout.setContentsMargins(0, 0, 0, 0)
+        self.titleBarLayout.setSpacing(0)
 
         icon_path = os.path.join(SCRIPT_DIR, "icon.svg")
         self.appIcon.setPixmap(QPixmap(icon_path).scaled(25, 25))
@@ -286,35 +297,73 @@ class Window(QWidget):
         self.TBCloseButton.setFixedWidth(titleBarHeight+10)
         self.TBCloseButton.setObjectName("titleBarButton")
 
-        self.userInputLayout.setContentsMargins(20,20,20,20)
+        self.outerLimiter.setFixedHeight(1)
+        self.outerLimiter.setObjectName("limiter")
 
-        self.workingAreaLimiter.setFixedWidth(2)
-        self.workingAreaLimiter.setObjectName("limiter")
+        self.workingAreaLayout.setContentsMargins(0, 0, 0, 0)
+        self.workingAreaLayout.setSpacing(0)
 
-        self.qrCodeLayout.setContentsMargins(20,20,20,20)
+        userInputLayout = self.userInputLayout.layout()
+        userInputLayout.setContentsMargins(0, 0, 0, 0)
+        userInputLayout.setSpacing(0)
 
+        self.userInputTitle.setMinimumHeight(100)
+        self.userInputTitle.setSizePolicy(QSizePolicy.Policy.MinimumExpanding, QSizePolicy.Policy.Maximum)
         self.userInputTitle.setObjectName("userInputTitle")
+
+        self.firstLimiter.setFixedHeight(1)
+        self.firstLimiter.setObjectName("limiter")
+
+        textEntryLayout = self.textEntryLayout.layout()
+        textEntryLayout.setContentsMargins(20, 0, 20, 0)
+        textEntryLayout.setSpacing(0)
+        self.textEntryLayout.setObjectName("textEntryLayout")
 
         self.textEntryTitle.setObjectName("textEntryTitle")
 
-        self.textEntry.setMinimumHeight(20)
-        self.textEntry.setMaximumHeight(200)
-        self.textEntry.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
+        self.textEntry.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding)
+        self.textEntry.setObjectName("textEntry")
+
+        self.secondLimiter.setFixedHeight(1)
+        self.secondLimiter.setObjectName("limiter")
+
+        eccButtonLayout = self.eccButtonLayout.layout()
+        eccButtonLayout.setContentsMargins(20, 0, 20, 40)
+        eccButtonLayout.setSpacing(0)
+
+        self.eccButtonGroupTitle.setObjectName("ECCTitle")
+
+        for button in self.eccButtonGroup.buttons():
+            button.setObjectName("ECCButton")
+        self.eccHighButton.setProperty("position", "last")
+
+        self.workingAreaLimiter.setFixedWidth(1)
+        self.workingAreaLimiter.setObjectName("limiter")
+
+        layout = self.qrCodeLayout.layout()
+        layout.setContentsMargins(20, 0, 20, 0)
+        layout.setSpacing(0)
 
         length = self.height()-200
         self.qrCode.setFixedSize(length, length)
+        self.qrCode.setProperty("state", "empty")
+
+        self.qrCodeText.setObjectName("QRCodeText")
+        self.qrCodeText.setStyleSheet(f"font-size: {length-700}px")
 
         self.qrCodeButtonsLayout.setContentsMargins(0, 20, 0, 0)
+        self.qrCodeButtonsLayout.setSpacing(0)
         
         self.generateButton.setFixedSize(length-110, 50)
         self.generateButton.setObjectName("QRButton")
+        self.generateButton.clicked.connect(self.qrCode.generate)
 
         icon_path = os.path.join(SCRIPT_DIR, "download.svg")
         self.downloadButton.setIcon(QIcon(icon_path))
         self.downloadButton.setIconSize(QSize(32, 32))
         self.downloadButton.setFixedSize(50, 50)
         self.downloadButton.setObjectName("QRButton")
-        self.downloadButton.setProperty("size", "small")
+        self.downloadButton.setProperty("style", "small")
 
         icon_path = os.path.join(SCRIPT_DIR, "copy.svg")
         self.copyButton.setIcon(QIcon(icon_path))
@@ -336,9 +385,20 @@ class Window(QWidget):
         X = SCREENW//2-WIDTH//2
         Y = SCREENH//2-HEIGHT//2
         return QPoint(X, Y), WIDTH, HEIGHT
-   
+
+class QRWidget(QWidget):
+    def __init__(self) -> None:
+        '''Initializes the widget that displays the QR Code.'''
+        super().__init__()
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.text = ''
+    
+    def generate(self) -> list[list]:
+        '''Generates the raw QR Code data'''
+        raise NotImplementedError
+
 class TitleBar(QWidget):
-    def __init__(self, parent):
+    def __init__(self, parent) -> None:
         '''Initializes the top bar widget.'''
         super().__init__(parent)
         self.setFixedHeight(50)
@@ -350,13 +410,15 @@ class TitleBar(QWidget):
         '''Triggered when the title bar is clicked by the mouse.'''
         if event.button() == Qt.MouseButton.LeftButton:
             self.setMouseTracking(True)
-            self.oldClickPos = event.position()
+            self.oldClickPos = QCursor.pos()
+            self.windowStartPos = self.window().normalPos
     
     def mouseReleaseEvent(self, event) -> None:
         '''Triggered when the title bar is released by the mouse.'''
         if event.button() == Qt.MouseButton.LeftButton:
             self.setMouseTracking(False)
             self.oldClickPos = None
+            self.windowStartPos = None
     
     def mouseMoveEvent(self, event) -> None:
         '''Triggered when the mouse moves over the title bar'''
@@ -364,25 +426,24 @@ class TitleBar(QWidget):
             window = self.window()
             if (event.buttons() == Qt.MouseButton.LeftButton) and not(window.isMinimized()):
                 if (window.isMaximized()) or (window.windowIsMaximized):
-                    self.newClickPos = event.position()
+                    mousePos = QCursor.pos()
                     coefs: tuple[float, float] = (
-                        self.newClickPos.x()/window.width(), 
-                        self.newClickPos.y()/window.height()
+                        mousePos.x()/self.width(), 
+                        mousePos.y()/self.height()
                     )
                     window.maximize(event)
-                    self.oldClickPos = QPointF(window.width()*coefs[0], window.height()*coefs[1])
-                    newPos = QCursor.pos() - self.oldClickPos.toPoint()
+                    newPos = mousePos - QPointF(self.width()*coefs[0], self.height()*coefs[1]).toPoint()
                     window.normalPos = newPos
                     window.move(window.normalPos.x(), window.normalPos.y())
+                    self.oldClickPos = QCursor.pos()
+                    self.windowStartPos = self.window().normalPos
                 else:
-                    self.newClickPos = event.position()
                     mousePos = QCursor.pos()
                     availableHeight = self.screen().availableGeometry().height()
                     if (mousePos.y() > availableHeight):
                         QCursor.setPos(mousePos.x(), availableHeight)
-                        self.newClickPos.setY(availableHeight)
-                    delta = self.newClickPos - self.oldClickPos
-                    newPos = window.normalPos + delta.toPoint()
+                    delta = mousePos - self.oldClickPos
+                    newPos = self.windowStartPos + delta
                     window.normalPos = newPos
                     window.move(window.normalPos.x(), window.normalPos.y())
 
@@ -391,15 +452,14 @@ class TitleBar(QWidget):
         if event.button() == Qt.MouseButton.LeftButton:
             self.window().maximize(event)
 
-
-
-
-class QRWidget(QWidget):
-    def __init__(self):
-        '''Initializes the widget that displays the QR Code.'''
+class QRThread(QThread):
+    def __init__(self) -> None:
+        '''Initializes the QThread that will handle QRCode creation.'''
         super().__init__()
-        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-        self.text = ''
+    
+    def run(self) -> None:
+        raise NotImplementedError()
+
 
 if __name__ == '__main__':
     program = Program()
