@@ -11,11 +11,11 @@ Began on March 10th 2026.
 import os
 import sys
 import ctypes
+#from time import sleep
 from PyQt6.QtWidgets import (
     QApplication,
     QLabel,
     QPushButton,
-    QRadioButton,
     QButtonGroup,
     QTextEdit,
     QWidget,
@@ -34,24 +34,71 @@ from PyQt6.QtGui import (
 )
 from PyQt6.QtCore import (
     Qt, 
-    QThread,
-    pyqtSignal,
     QSize,
     QPoint,
     QPointF,
+    QTimer,
+)
+from multiprocessing import (
+    Process,
+    Queue,
 )
 
 global SCRIPT_DIR
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
+def generateQRCode(text: str, eccLevel: int, resultQueue: Queue) -> None:
+        '''
+        Generates the rawData that will be painted onto the QR Widget. 
+        This function and all the following must execute in a separate process to prevent the GUI from freezing.
+        '''
+        mode: str = findMode(text)
+        print(mode)
+
+def findMode(text: str) -> str:
+        '''
+        Returns the mode will be used when generating the QR Code between
+        numeric, alphanum, byte, kanji
+        '''
+        def isalphanum(text: str) -> bool:
+            '''Returns whether the given string is alphanumeric according to QR Code encoding modes.'''
+            charList: list[str] = (
+                   [str(num) for num in range(10)] + 
+                   [chr(char) for char in range(ord('A'), ord('Z')+1)] +
+                   [' ', '$', '%', '*', '+', '-', '.', '/', ':']
+            )
+            for char in text:
+                if not(char in charList):
+                    return False
+            return True
+        
+        def isByte(text: str) -> bool:
+            '''Returns whether the given string is binary/byte according to QR Code encoding modes.'''
+            return False
+        
+        def isKanji(text: str) -> bool:
+            '''Returns whether the given string is kanji according to QR Code encoding modes.'''
+            return False
+        
+        if (text.isnumeric()):
+            return 'numeric'
+        elif (isalphanum(text)):
+            return 'alphanum'
+        elif (isByte(text)):
+            return 'byte'
+        elif (isKanji(text)):
+            return 'kanji'
+        else:
+            return 'GO FUCK YOURSELF'
+
+                
+        
+
 class Program:
     '''Wrapper class for the window and application instances.'''
     def __init__(self):
-        self.app = Application()
-        icon_path = os.path.join(SCRIPT_DIR, "icon.ico")
-        self.app.setWindowIcon(QIcon(icon_path))
-
-        self.window = Window()
+        self.app = Application(self)
+        self.window = Window(self)
     
     def execute(self) -> None:
         '''Executes the program.'''
@@ -59,13 +106,32 @@ class Program:
         self.app.exec()
 
 class Application(QApplication):
-    def __init__(self):
+    def __init__(self, program: Program):
         super().__init__([])
+        self.program: Program = program
+        self.text: str | None = None
+        self.eccLevel: int | None = None
+        self.qrProcess: Process | None = None
+        self.resultQueue: Queue | None = None
+
+        icon_path = os.path.join(SCRIPT_DIR, "icon.ico")
+        self.setWindowIcon(QIcon(icon_path))
+    
+    def createQRProcess(self) -> None:
+        '''Creates and starts a process, in which the QR Code's rawData will be generated.'''
+        window: Window = self.program.window
+        self.text = window.textEntry.toPlainText()
+        self.eccLevel = window.eccButtonGroup.checkedId()
+
+        self.resultQueue = Queue()
+        self.qrProcess = Process(target=generateQRCode, args=(self.text, self.eccLevel, self.resultQueue), daemon=False)
+        self.qrProcess.start()
 
 class Window(QWidget):
-    def __init__(self):
+    def __init__(self, program: Program):
         '''Initializes the UI for the application.'''
         super().__init__()
+        self.program: Program = program
         self._setupWindowGeometry()
         self._createTitleBarWidgets()
         self._createWorkingAreaWidgets()
@@ -74,8 +140,15 @@ class Window(QWidget):
         self._setBackgroundColor((26, 12, 32))
         self._stylizeWidgets()
     
+    def disableQRCodeLayout(self) -> None:
+        '''Disables the QR Code area's widgets.'''
+        self.generateButton.setEnabled(False)
+        self.downloadButton.setEnabled(False)
+        self.copyButton.setEnabled(False)
+        # add loading icon on qrcode here
+    
     def maximize(self, event) -> None:
-        '''Triggered when TBMaxButton is pressed, or when the title bar is '''
+        '''Triggered when TBMaxButton is pressed, or when the title bar is double clicked'''
         if (self.isMaximized()) or (self.windowIsMaximized):
             self.windowIsMaximized = False
             self.showNormal()
@@ -85,15 +158,15 @@ class Window(QWidget):
             self.windowIsMaximized = True
             self.showMaximized()
             self.TBMaxButton.setIcon(self.normalizeIcon)
-        self.handleWindowEdges()
+        self.switchWindowEdges()
 
     def showEvent(self, event) -> None:
         '''Triggered when the window is shown on the screen'''
         super().showEvent(event)
-        self.handleWindowEdges()
+        self.switchWindowEdges()
     
-    def handleWindowEdges(self) -> None:
-        '''Communicates with the Windows DWM API to handle the window's borders and corners'''
+    def switchWindowEdges(self) -> None:
+        '''Communicates with the Windows DWM API to switch the window's borders and corners between rounded and not'''
         if sys.platform == "win32":
             hwnd = int(self.winId())
             DWMWA_WINDOW_CORNER_PREFERENCE = 33
@@ -204,9 +277,13 @@ class Window(QWidget):
         self.qrCode.setLayout(QVBoxLayout())
 
         self.qrCodeText = QLabel("Waiting for input...")
+
+        self.qrCodeLoadingIcon = QLabel()
         
         self.generateButton = QPushButton("Generate")
         self.generateButton.setAutoDefault(False)
+        self.generateButton.clicked.connect(self.disableQRCodeLayout)
+        self.generateButton.clicked.connect(self.program.app.createQRProcess)
 
         self.downloadButton = QPushButton()
         self.downloadButton.setAutoDefault(False)
@@ -250,11 +327,13 @@ class Window(QWidget):
         for button in self.eccButtonGroup.buttons():
             eccButtonLayout.addWidget(button)
 
+        qrCode = self.qrCode.layout()
+        qrCode.addWidget(self.qrCodeText)
+        qrCode.addWidget(self.qrCodeLoadingIcon)
+
         qrCodeLayout = self.qrCodeLayout.layout()
         qrCodeLayout.addWidget(self.qrCode)
         qrCodeLayout.addLayout(self.qrCodeButtonsLayout)
-
-        self.qrCode.layout().addWidget(self.qrCodeText)
 
         self.qrCodeButtonsLayout.addWidget(self.generateButton)
         self.qrCodeButtonsLayout.addWidget(self.downloadButton)
@@ -349,14 +428,18 @@ class Window(QWidget):
         self.qrCode.setProperty("state", "empty")
 
         self.qrCodeText.setObjectName("QRCodeText")
-        self.qrCodeText.setStyleSheet(f"font-size: {length-700}px")
+        self.qrCodeText.setStyleSheet(f"font-size: {length/15}px")
+
+        icon_path = os.path.join(SCRIPT_DIR, "loading.svg")
+        size = int(length/3)
+        self.qrCodeLoadingIcon.setPixmap(QPixmap(icon_path).scaled(size,size))
+        self.qrCodeLoadingIcon.hide()
 
         self.qrCodeButtonsLayout.setContentsMargins(0, 20, 0, 0)
         self.qrCodeButtonsLayout.setSpacing(0)
         
         self.generateButton.setFixedSize(length-110, 50)
         self.generateButton.setObjectName("QRButton")
-        self.generateButton.clicked.connect(self.qrCode.generate)
 
         icon_path = os.path.join(SCRIPT_DIR, "download.svg")
         self.downloadButton.setIcon(QIcon(icon_path))
@@ -372,7 +455,8 @@ class Window(QWidget):
         self.copyButton.setObjectName("QRButton")
         self.copyButton.setProperty("style", "small")
 
-        with open(".\\style.qss", mode="r", encoding="utf-8") as style:
+        style_path = os.path.join(SCRIPT_DIR, "style.qss")
+        with open(style_path, mode="r", encoding="utf-8") as style:
             self.setStyleSheet(style.read())
         
     def _calculateWindowGeometry(self) -> tuple[QPoint,int,int]:
@@ -391,14 +475,14 @@ class QRWidget(QWidget):
         '''Initializes the widget that displays the QR Code.'''
         super().__init__()
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-        self.text = ''
-    
-    def generate(self) -> list[list]:
-        '''Generates the raw QR Code data'''
-        raise NotImplementedError
+        self.rawData = None
+
+    def paintQRCode(self) -> None:
+        '''Paints the QR Code onto the widget, as long as there is rawData to use.'''
+        raise NotImplementedError()
 
 class TitleBar(QWidget):
-    def __init__(self, parent) -> None:
+    def __init__(self, parent: Window) -> None:
         '''Initializes the top bar widget.'''
         super().__init__(parent)
         self.setFixedHeight(50)
@@ -451,15 +535,6 @@ class TitleBar(QWidget):
         '''Triggered when the title bar is double clicked by the mouse.'''
         if event.button() == Qt.MouseButton.LeftButton:
             self.window().maximize(event)
-
-class QRThread(QThread):
-    def __init__(self) -> None:
-        '''Initializes the QThread that will handle QRCode creation.'''
-        super().__init__()
-    
-    def run(self) -> None:
-        raise NotImplementedError()
-
 
 if __name__ == '__main__':
     program = Program()
