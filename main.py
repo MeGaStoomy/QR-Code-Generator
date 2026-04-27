@@ -7,12 +7,13 @@ This was made as a proof of skill and knowledge in both simple app making (with 
 with data (creating the QR CODE itself), and general Python knowledge.
 
 Began on March 10th 2026.
+Slowed down progress from April 6th 2026 to April 27th 2026
 """
 import os
 import sys
 import ctypes
 from typing_extensions import Self
-#from time import sleep
+from time import sleep, time
 from PyQt6.QtWidgets import (
     QApplication,
     QLabel,
@@ -43,6 +44,7 @@ from PyQt6.QtCore import (
 from multiprocessing import (
     Process,
     Queue,
+    freeze_support,
 )
 
 global SCRIPT_DIR
@@ -67,6 +69,9 @@ class Application(QApplication):
         self.text: str | None = None
         self.eccLevel: int | None = None
         self.resultQueue: Queue | None = None
+        self.checkTimer: QTimer = QTimer(self)
+        self.checkTimer.timeout.connect(self.checkQueue)
+        self.qrProcessStart: float | None = None
         self.qrWorker: QRWorker | None = None
         self.qrProcess: Process | None = None
 
@@ -76,20 +81,45 @@ class Application(QApplication):
     def createQRProcess(self) -> None:
         '''Creates and starts a process, in which the QR Code's rawData will be generated.'''
         window: Window = self.program.window
-        self.text = window.textEntry.toPlainText()
-        if (self.text == ''):
-            self.text = None
-            print('text cannot be empty!')
+        window.disableQRCodeLayout()
+        text = window.textEntry.toPlainText()
+        if (text == ''):
+            print('Text cannot be empty!')
             window.enableQRCodeLayout()
             return
+        self.text = text
         self.eccLevel = window.eccButtonGroup.checkedId()
         self.resultQueue = Queue()
-
         self.qrWorker = QRWorker(self.text, self.eccLevel, self.resultQueue)
-        print('created worker')
-        self.qrProcess = Process(target=self.qrWorker.generateQRCode, daemon=False)
-        print('created process')
+        self.qrProcess = Process(target=self.qrWorker.generateQRCode, daemon=True)
         self.qrProcess.start()
+        self.qrProcessStart = time()
+        self.checkTimer.start(100)
+    
+    def checkQueue(self) -> None:
+        '''Checks the resultQueue to see whether the QRWorker has sent back something or not.'''
+        if not(self.resultQueue is None):
+            if (time() - self.qrProcessStart > 10):
+                print('Process timed out!')
+                self.terminateQRProcess()
+            elif not(self.resultQueue.empty()):
+                rawData: str | None = self.terminateQRProcess(getRawData=True)
+                print(rawData)
+    
+    def terminateQRProcess(self, getRawData: bool = False) -> str | None:
+        '''Properly terminates the QR Process and everything related.'''
+        self.checkTimer.stop()
+        self.qrProcess.terminate()
+        rawData: str | None = None
+        if (getRawData):
+            try: 
+                rawData = self.resultQueue.get(block=False, timeout=5000)
+            except TimeoutError:
+                print('Error while retrieving rawData from the Queue!')
+        self.resultQueue = None
+        self.qrWorker.resetClass()
+        self.program.window.enableQRCodeLayout()
+        return rawData
 
 class Window(QWidget):
     def __init__(self, program: Program):
@@ -253,7 +283,6 @@ class Window(QWidget):
         
         self.generateButton = QPushButton("Generate")
         self.generateButton.setAutoDefault(False)
-        self.generateButton.clicked.connect(self.disableQRCodeLayout)
         self.generateButton.clicked.connect(self.program.app.createQRProcess)
 
         self.downloadButton = QPushButton()
@@ -513,11 +542,13 @@ class QRWorker:
     _initialized: bool = False
 
     def __new__(cls, *args, **kwargs) -> Self:
+        '''Ensures only one QRWorker can exist at a time.'''
         if cls._instance is None:
             cls._instance = super().__new__(cls)
         return cls._instance
 
     def __init__(self, text: str, eccLevel: int, resultQueue: Queue) -> None:
+        '''Initializes the QRWorker.'''
         if self.__class__._initialized:
             print('Can only create one QRWorker at a time!')
             return
@@ -526,15 +557,21 @@ class QRWorker:
             self.eccLevel: int = eccLevel
             self.resultQueue: Queue = resultQueue
             self.__class__._initialized = True
-    
+
     def generateQRCode(self) -> None:
         '''
         Generates the rawData that will be painted onto the QR Widget. 
         This function and all the following must execute in a separate process to prevent the GUI from freezing.
         '''
-        print('running')
         mode: str = ModeFinder.findMode(self.text)
-        print(mode) 
+        #sleep(100)
+        self.resultQueue.put(mode + ' ' + str(self.eccLevel))
+    
+    @staticmethod
+    def resetClass() -> None:
+        '''Cleans up after the QR '''
+        __class__._instance = None
+        __class__._initialized = False
             
 
 class ModeFinder:
@@ -586,5 +623,6 @@ class ModeFinder:
         return False 
 
 if __name__ == '__main__':
+    freeze_support()
     program = Program()
     program.execute()
