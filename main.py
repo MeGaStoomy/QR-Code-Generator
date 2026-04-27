@@ -11,6 +11,7 @@ Began on March 10th 2026.
 import os
 import sys
 import ctypes
+from typing_extensions import Self
 #from time import sleep
 from PyQt6.QtWidgets import (
     QApplication,
@@ -47,52 +48,6 @@ from multiprocessing import (
 global SCRIPT_DIR
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
-def generateQRCode(text: str, eccLevel: int, resultQueue: Queue) -> None:
-        '''
-        Generates the rawData that will be painted onto the QR Widget. 
-        This function and all the following must execute in a separate process to prevent the GUI from freezing.
-        '''
-        mode: str = findMode(text)
-        print(mode)
-
-def findMode(text: str) -> str:
-        '''
-        Returns the mode will be used when generating the QR Code between
-        numeric, alphanum, byte, kanji
-        '''
-        def isalphanum(text: str) -> bool:
-            '''Returns whether the given string is alphanumeric according to QR Code encoding modes.'''
-            charList: list[str] = (
-                   [str(num) for num in range(10)] + 
-                   [chr(char) for char in range(ord('A'), ord('Z')+1)] +
-                   [' ', '$', '%', '*', '+', '-', '.', '/', ':']
-            )
-            for char in text:
-                if not(char in charList):
-                    return False
-            return True
-        
-        def isByte(text: str) -> bool:
-            '''Returns whether the given string is binary/byte according to QR Code encoding modes.'''
-            return False
-        
-        def isKanji(text: str) -> bool:
-            '''Returns whether the given string is kanji according to QR Code encoding modes.'''
-            return False
-        
-        if (text.isnumeric()):
-            return 'numeric'
-        elif (isalphanum(text)):
-            return 'alphanum'
-        elif (isByte(text)):
-            return 'byte'
-        elif (isKanji(text)):
-            return 'kanji'
-        else:
-            return 'GO FUCK YOURSELF'
-
-                
-        
 
 class Program:
     '''Wrapper class for the window and application instances.'''
@@ -111,8 +66,9 @@ class Application(QApplication):
         self.program: Program = program
         self.text: str | None = None
         self.eccLevel: int | None = None
-        self.qrProcess: Process | None = None
         self.resultQueue: Queue | None = None
+        self.qrWorker: QRWorker | None = None
+        self.qrProcess: Process | None = None
 
         icon_path = os.path.join(SCRIPT_DIR, "icon.ico")
         self.setWindowIcon(QIcon(icon_path))
@@ -121,10 +77,18 @@ class Application(QApplication):
         '''Creates and starts a process, in which the QR Code's rawData will be generated.'''
         window: Window = self.program.window
         self.text = window.textEntry.toPlainText()
+        if (self.text == ''):
+            self.text = None
+            print('text cannot be empty!')
+            window.enableQRCodeLayout()
+            return
         self.eccLevel = window.eccButtonGroup.checkedId()
-
         self.resultQueue = Queue()
-        self.qrProcess = Process(target=generateQRCode, args=(self.text, self.eccLevel, self.resultQueue), daemon=False)
+
+        self.qrWorker = QRWorker(self.text, self.eccLevel, self.resultQueue)
+        print('created worker')
+        self.qrProcess = Process(target=self.qrWorker.generateQRCode, daemon=False)
+        print('created process')
         self.qrProcess.start()
 
 class Window(QWidget):
@@ -146,6 +110,13 @@ class Window(QWidget):
         self.downloadButton.setEnabled(False)
         self.copyButton.setEnabled(False)
         # add loading icon on qrcode here
+    
+    def enableQRCodeLayout(self) -> None:
+        '''Enables the QR Code area's widgets.'''
+        self.generateButton.setEnabled(True)
+        self.downloadButton.setEnabled(True)
+        self.copyButton.setEnabled(True)
+        # remove loading icon on qrcode here
     
     def maximize(self, event) -> None:
         '''Triggered when TBMaxButton is pressed, or when the title bar is double clicked'''
@@ -472,7 +443,7 @@ class Window(QWidget):
 
 class QRWidget(QWidget):
     def __init__(self) -> None:
-        '''Initializes the widget that displays the QR Code.'''
+        '''Initializes the special QWidget that displays the QR Code.'''
         super().__init__()
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.rawData = None
@@ -535,6 +506,84 @@ class TitleBar(QWidget):
         '''Triggered when the title bar is double clicked by the mouse.'''
         if event.button() == Qt.MouseButton.LeftButton:
             self.window().maximize(event)
+
+class QRWorker:
+    '''Class whose instance is ran in another process to generate the QR Code's rawData.'''
+    _instance = None
+    _initialized: bool = False
+
+    def __new__(cls, *args, **kwargs) -> Self:
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
+
+    def __init__(self, text: str, eccLevel: int, resultQueue: Queue) -> None:
+        if self.__class__._initialized:
+            print('Can only create one QRWorker at a time!')
+            return
+        else:
+            self.text: str = text
+            self.eccLevel: int = eccLevel
+            self.resultQueue: Queue = resultQueue
+            self.__class__._initialized = True
+    
+    def generateQRCode(self) -> None:
+        '''
+        Generates the rawData that will be painted onto the QR Widget. 
+        This function and all the following must execute in a separate process to prevent the GUI from freezing.
+        '''
+        print('running')
+        mode: str = ModeFinder.findMode(self.text)
+        print(mode) 
+            
+
+class ModeFinder:
+    '''Static class used for finding the mode of a given string acording to QR Code mode encoding.'''
+
+    @staticmethod
+    def findMode(text: str) -> str:
+        '''
+        Returns the mode that will be used when generating the QR Code, between
+        numeric, alphanum, byte, and kanji.
+        '''
+        if (ModeFinder.isNumeric(text)):
+            return 'numeric'
+        elif (ModeFinder.isAlphanum(text)):
+            return 'alphanum'
+        elif (ModeFinder.isByte(text)):
+            return 'byte'
+        elif (ModeFinder.isKanji(text)):
+            return 'kanji'
+        else:
+            return 'GO FUCK YOURSELF'
+    
+    @staticmethod
+    def isNumeric(text: str) -> bool:
+        '''Returns whether the given string is numeric according to QR Code encoding modes.'''
+        return text.isnumeric()
+    
+    @staticmethod
+    def isAlphanum(text: str) -> bool:
+        '''Returns whether the given string is alphanumeric according to QR Code encoding modes.'''
+        charList: list[str] = (
+                [str(num) for num in range(10)] + 
+                [chr(char) for char in range(ord('A'), ord('Z')+1)] +
+                [' ', '$', '%', '*', '+', '-', '.', '/', ':']
+        )
+        for char in text:
+            if not(char in charList):
+                return False
+        return True
+
+    @staticmethod
+    def isByte(text: str) -> bool:
+        '''Returns whether the given string is binary/byte according to QR Code encoding modes.'''
+        return False
+
+    @staticmethod
+    def isKanji(text: str) -> bool:
+        '''Returns whether the given string is kanji according to QR Code encoding modes.'''
+        return False 
 
 if __name__ == '__main__':
     program = Program()
