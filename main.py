@@ -12,7 +12,8 @@ Slowed down progress from April 6th 2026 to April 27th 2026
 import os
 import sys
 import ctypes
-from typing_extensions import Self
+from capacities import getCapacity
+from typing_extensions import Self, Any
 from time import sleep, time
 from PyQt6.QtWidgets import (
     QApplication,
@@ -103,14 +104,26 @@ class Application(QApplication):
                 print('Process timed out!')
                 self.terminateQRProcess()
             elif not(self.resultQueue.empty()):
-                rawData: str | None = self.terminateQRProcess(getRawData=True)
-                print(rawData)
+                rawData: list | tuple = self.terminateQRProcess(getRawData=True)
+                if (type(rawData) == list):
+                    # No errors, continue normally.
+                    print('No errors occured during generation.')
+                elif (type(rawData) == tuple):
+                    # An error occured, rawData: tuple[errorCode: int, *args].
+                    if (rawData[0] == 0):
+                        # Error during encoding of a character, rawData: tuple[0, character that failed]
+                        print(chr(rawData[1]) + ' cannot be encoded using any of the four available modes!')
+                
     
-    def terminateQRProcess(self, getRawData: bool = False) -> str | None:
-        '''Properly terminates the QR Process and everything related.'''
+    def terminateQRProcess(self, getRawData: bool = False) -> None | list | tuple:
+        '''
+        Properly terminates the QR Process and everything related, 
+        and retrieves data from the queue if needed, in which case rawData
+        should be a list, or an integer if an error occured during generation.
+        '''
         self.checkTimer.stop()
         self.qrProcess.terminate()
-        rawData: str | None = None
+        rawData: None | list | tuple = None
         if (getRawData):
             try: 
                 rawData = self.resultQueue.get(block=False, timeout=5000)
@@ -538,7 +551,7 @@ class TitleBar(QWidget):
 
 class QRWorker:
     '''Class whose instance is ran in another process to generate the QR Code's rawData.'''
-    _instance = None
+    _instance: None | __class__ = None
     _initialized: bool = False
 
     def __new__(cls, *args, **kwargs) -> Self:
@@ -563,13 +576,35 @@ class QRWorker:
         Generates the rawData that will be painted onto the QR Widget. 
         This function and all the following must execute in a separate process to prevent the GUI from freezing.
         '''
-        mode: str = ModeFinder.findMode(self.text)
-        #sleep(100)
-        self.resultQueue.put(mode + ' ' + str(self.eccLevel))
+        rawData: str = ''
+        segments: list[tuple[str, str, str]] = []
+        currentSegment: list = []
+        currentMode: None | int = None
+        modeBits: dict[int, str] = {
+            1:'0001',
+            2:'0010',
+            3:'0100',
+            4:'1000',
+        }
+
+        for char in self.text:
+            mode: int = ModeFinder.findMode(char)
+            if not(0 < mode < 5):
+                # A character has failed to encode, mode is now equal to ord(char)
+                self.resultQueue.put((0, mode))
+                return
+            elif (mode != currentMode):
+                if (currentMode):
+                    segments.append((modeBits[currentMode],  ''.join(currentSegment)))
+                currentMode = mode
+                currentSegment = []
+        
+        #sleep(100) #fake math
+        #self.resultQueue.put(self.rawData)
     
     @staticmethod
     def resetClass() -> None:
-        '''Cleans up after the QR '''
+        '''Resets the class attributes to their default values.'''
         __class__._instance = None
         __class__._initialized = False
             
@@ -578,49 +613,61 @@ class ModeFinder:
     '''Static class used for finding the mode of a given string acording to QR Code mode encoding.'''
 
     @staticmethod
-    def findMode(text: str) -> str:
+    def findMode(char: str) -> int:
         '''
-        Returns the mode that will be used when generating the QR Code, between
+        Returns the mode that will be used to encode the given character, between
         numeric, alphanum, byte, and kanji.
+        Returns  if the character cannot be encoded using any of the four modes.
         '''
-        if (ModeFinder.isNumeric(text)):
-            return 'numeric'
-        elif (ModeFinder.isAlphanum(text)):
-            return 'alphanum'
-        elif (ModeFinder.isByte(text)):
-            return 'byte'
-        elif (ModeFinder.isKanji(text)):
-            return 'kanji'
+        if (ModeFinder.isNumeric(char)):
+            return 1
+        elif (ModeFinder.isAlphanum(char)):
+            return 2
+        elif (ModeFinder.isByte(char)):
+            return 3
+        elif (ModeFinder.isKanji(char)):
+            return 4
         else:
-            return 'GO FUCK YOURSELF'
+            return ord(char)
     
     @staticmethod
-    def isNumeric(text: str) -> bool:
-        '''Returns whether the given string is numeric according to QR Code encoding modes.'''
-        return text.isnumeric()
+    def isNumeric(char: str) -> bool:
+        '''Returns whether the given character is numeric according to QR Code encoding modes.'''
+        return char.isnumeric()
     
     @staticmethod
-    def isAlphanum(text: str) -> bool:
-        '''Returns whether the given string is alphanumeric according to QR Code encoding modes.'''
+    def isAlphanum(char: str) -> bool:
+        '''Returns whether the given character is alphanumeric according to QR Code encoding modes.'''
         charList: list[str] = (
                 [str(num) for num in range(10)] + 
                 [chr(char) for char in range(ord('A'), ord('Z')+1)] +
                 [' ', '$', '%', '*', '+', '-', '.', '/', ':']
         )
-        for char in text:
-            if not(char in charList):
-                return False
+        if not(char in charList):
+            return False
         return True
 
     @staticmethod
-    def isByte(text: str) -> bool:
-        '''Returns whether the given string is binary/byte according to QR Code encoding modes.'''
-        return False
+    def isByte(char: str) -> bool:
+        '''Returns whether the given character is binary/byte according to QR Code encoding modes.'''
+        if (ord(char) > 255):
+            # print(char + ' n\'est pas byte')
+            return False
+        return True
 
     @staticmethod
-    def isKanji(text: str) -> bool:
-        '''Returns whether the given string is kanji according to QR Code encoding modes.'''
-        return False 
+    def isKanji(char: str) -> bool:
+        '''Returns whether the given character is kanji/kana according to QR Code encoding modes.'''
+        try:
+            b = char.encode('shift_jis')
+        except UnicodeEncodeError:
+            return False
+
+        if len(b) != 2:
+            return False  # Must be a 2-byte Shift-JIS character
+
+        code = int.from_bytes(b, 'big')
+        return (0x8140 <= code <= 0x9FFC) or (0xE040 <= code <= 0xEAFC)
 
 if __name__ == '__main__':
     freeze_support()
