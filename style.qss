@@ -27,7 +27,7 @@ TitleBar {
     background-color: #120917;
 }
 
-#textEntryTitle, #ECCTitle { 
+#textEntryTitle, #ecTitle { 
     qproperty-alignment: AlignCenter; 
     font-size: 30px;
     margin: 30px 0 20px 0;
@@ -42,29 +42,29 @@ QTextEdit {
     background-color: rgb(45, 16, 58);
 }
 
-#ECCButton {
+#ecButton {
     padding: 16px 0 15px 0;
     border-top: 1px solid #3f2f4f;
     margin: 0 0 0 0;
 }
 
-#ECCButton[position="last"] {
+#ecButton[position="last"] {
     border-bottom: 1px solid #3f2f4f;
 }
 
-#ECCButton::text {
+#ecButton::text {
     text-align: center;
 }
 
-#ECCButton:hover {
+#ecButton:hover {
     background-color: rgb(81, 44, 97);
 }
 
-#ECCButton:pressed {
+#ecButton:pressed {
     background-color: rgb(64, 28, 80);
 }
 
-#ECCButton:checked {
+#ecButton:checked {
     background-color: rgb(55, 23, 68);
 }
 

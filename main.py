@@ -13,8 +13,9 @@ import os
 import sys
 import ctypes
 from capacities import getCapacity
-from typing_extensions import Self, Any
+from typing import Self, Any, override
 from time import sleep, time
+from enum import Enum, auto
 from PyQt6.QtWidgets import (
     QApplication,
     QLabel,
@@ -50,6 +51,7 @@ from multiprocessing import (
 
 global SCRIPT_DIR
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("stoomy.qrcodegen")
 
 
 class Program:
@@ -68,16 +70,13 @@ class Application(QApplication):
         super().__init__([])
         self.program: Program = program
         self.text: str | None = None
-        self.eccLevel: int | None = None
+        self.ecLevel: int | None = None
         self.resultQueue: Queue | None = None
         self.checkTimer: QTimer = QTimer(self)
         self.checkTimer.timeout.connect(self.checkQueue)
         self.qrProcessStart: float | None = None
         self.qrWorker: QRWorker | None = None
         self.qrProcess: Process | None = None
-
-        icon_path = os.path.join(SCRIPT_DIR, "icon.ico")
-        self.setWindowIcon(QIcon(icon_path))
     
     def createQRProcess(self) -> None:
         '''Creates and starts a process, in which the QR Code's rawData will be generated.'''
@@ -89,9 +88,9 @@ class Application(QApplication):
             window.enableQRCodeLayout()
             return
         self.text = text
-        self.eccLevel = window.eccButtonGroup.checkedId()
+        self.ecLevel = window.ecButtonGroup.checkedId()
         self.resultQueue = Queue()
-        self.qrWorker = QRWorker(self.text, self.eccLevel, self.resultQueue)
+        self.qrWorker = QRWorker(self.text, self.ecLevel, self.resultQueue)
         self.qrProcess = Process(target=self.qrWorker.generateQRCode, daemon=True)
         self.qrProcess.start()
         self.qrProcessStart = time()
@@ -110,9 +109,11 @@ class Application(QApplication):
                     print('No errors occured during generation.')
                 elif (type(rawData) == tuple):
                     # An error occured, rawData: tuple[errorCode: int, *args].
-                    if (rawData[0] == 0):
+                    errorCode: int = rawData[0]
+                    if (errorCode == 0):
                         # Error during encoding of a character, rawData: tuple[0, character that failed]
-                        print(chr(rawData[1]) + ' cannot be encoded using any of the four available modes!')
+                        failedChar: str = chr(rawData[1])
+                        print(failedChar + ' cannot be encoded using any of the four available modes!')
                 
     
     def terminateQRProcess(self, getRawData: bool = False) -> None | list | tuple:
@@ -161,7 +162,7 @@ class Window(QWidget):
         self.copyButton.setEnabled(True)
         # remove loading icon on qrcode here
     
-    def maximize(self, event) -> None:
+    def maximize(self, *args: Any) -> None:
         '''Triggered when TBMaxButton is pressed, or when the title bar is double clicked'''
         if (self.isMaximized()) or (self.windowIsMaximized):
             self.windowIsMaximized = False
@@ -205,14 +206,6 @@ class Window(QWidget):
         #self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setGeometry(self.normalPos.x(), self.normalPos.y(), self.normalWidth, self.normalHeight)
 
-    def _setBackgroundColor(self, backgroundColor: tuple[int, int, int]) -> None:
-        '''Sets the color of the main window's background to the specified RGB color.'''
-        palette = self.palette()
-        color = QColor(*backgroundColor)
-        palette.setColor(QPalette.ColorRole.Window, color)
-        self.setPalette(palette)
-        self.setAutoFillBackground(True)
-
     def _initLayout(self) -> None:
         '''Initializes all the layouts that will automatically arrange all the widgets in the window.'''
         self.outerLayout = QVBoxLayout()
@@ -227,8 +220,8 @@ class Window(QWidget):
         self.textEntryLayout = QWidget()
         self.textEntryLayout.setLayout(QVBoxLayout())
 
-        self.eccButtonLayout = QWidget()
-        self.eccButtonLayout.setLayout(QVBoxLayout())
+        self.ecButtonLayout = QWidget()
+        self.ecButtonLayout.setLayout(QVBoxLayout())
 
         self.qrCodeLayout = QWidget()
         self.qrCodeLayout.setLayout(QVBoxLayout())
@@ -269,21 +262,21 @@ class Window(QWidget):
 
         self.secondLimiter = QWidget()
 
-        self.eccButtonGroupTitle = QLabel("Error Correction Level :")
+        self.ecButtonGroupTitle = QLabel("Error Correction Level :")
         
-        self.eccLowButton = QPushButton("Level L (Low) : Up to 7% data recovery.")
-        self.eccMediumButton = QPushButton("Level M (Medium) : Up to 15% data recovery.")
-        self.eccQuartileButton = QPushButton("Level Q (Quartile) : Up to 25% data recovery.")
-        self.eccHighButton = QPushButton("Level H (High) : Up to 30% data recovery.")
+        self.ecLowButton = QPushButton("Level L (Low) : Up to 7% data recovery.")
+        self.ecMediumButton = QPushButton("Level M (Medium) : Up to 15% data recovery.")
+        self.ecQuartileButton = QPushButton("Level Q (Quartile) : Up to 25% data recovery.")
+        self.ecHighButton = QPushButton("Level H (High) : Up to 30% data recovery.")
 
-        self.eccButtonGroup = QButtonGroup()
-        self.eccButtonGroup.addButton(self.eccLowButton, 1)
-        self.eccButtonGroup.addButton(self.eccMediumButton, 2)
-        self.eccButtonGroup.addButton(self.eccQuartileButton, 3)
-        self.eccButtonGroup.addButton(self.eccHighButton, 4)
-        for button in self.eccButtonGroup.buttons():
+        self.ecButtonGroup = QButtonGroup()
+        self.ecButtonGroup.addButton(self.ecLowButton, 1)
+        self.ecButtonGroup.addButton(self.ecMediumButton, 2)
+        self.ecButtonGroup.addButton(self.ecQuartileButton, 3)
+        self.ecButtonGroup.addButton(self.ecHighButton, 4)
+        for button in self.ecButtonGroup.buttons():
             button.setCheckable(True)
-        self.eccMediumButton.setChecked(True)
+        self.ecMediumButton.setChecked(True)
 
         self.workingAreaLimiter = QWidget()
 
@@ -328,17 +321,17 @@ class Window(QWidget):
         userInputLayout.addWidget(self.firstLimiter)
         userInputLayout.addWidget(self.textEntryLayout)
         userInputLayout.addWidget(self.secondLimiter)
-        userInputLayout.addWidget(self.eccButtonLayout)
+        userInputLayout.addWidget(self.ecButtonLayout)
         
         textEntryLayout = self.textEntryLayout.layout()
         textEntryLayout.addWidget(self.textEntryTitle)
         textEntryLayout.addWidget(self.textEntry)
 
-        eccButtonLayout = self.eccButtonLayout.layout()
-        eccButtonLayout.addWidget(self.eccButtonGroupTitle)
+        ecButtonLayout = self.ecButtonLayout.layout()
+        ecButtonLayout.addWidget(self.ecButtonGroupTitle)
 
-        for button in self.eccButtonGroup.buttons():
-            eccButtonLayout.addWidget(button)
+        for button in self.ecButtonGroup.buttons():
+            ecButtonLayout.addWidget(button)
 
         qrCode = self.qrCode.layout()
         qrCode.addWidget(self.qrCodeText)
@@ -352,9 +345,21 @@ class Window(QWidget):
         self.qrCodeButtonsLayout.addWidget(self.downloadButton)
         self.qrCodeButtonsLayout.addWidget(self.copyButton)
     
+    def _setBackgroundColor(self, backgroundColor: tuple[int, int, int]) -> None:
+        '''Sets the color of the main window's background to the specified RGB color.'''
+        palette = self.palette()
+        color = QColor(*backgroundColor)
+        palette.setColor(QPalette.ColorRole.Window, color)
+        self.setPalette(palette)
+        self.setAutoFillBackground(True)
+    
     def _stylizeWidgets(self) -> None:
         '''Applies all of the style to all the widgets/layouts'''
-        titleBarHeight = self.titleBar.height()
+        iconPath: str = os.path.join(SCRIPT_DIR, r"icon.ico")
+        self.setWindowIcon(QIcon(iconPath))
+        self.setWindowTitle('QR Code Generator - Waiting')
+
+        titleBarHeight: int = self.titleBar.height()
 
         self.outerLayout.setContentsMargins(0, 0, 0, 0)
         self.outerLayout.setSpacing(0)
@@ -362,13 +367,13 @@ class Window(QWidget):
         self.titleBarLayout.setContentsMargins(0, 0, 0, 0)
         self.titleBarLayout.setSpacing(0)
 
-        icon_path = os.path.join(SCRIPT_DIR, "icon.svg")
-        self.appIcon.setPixmap(QPixmap(icon_path).scaled(25, 25))
+        iconPath = os.path.join(SCRIPT_DIR, r"titlebar-icon.svg")
+        self.appIcon.setPixmap(QPixmap(iconPath).scaled(25, 25))
         self.appIcon.setContentsMargins(15,0,15,0)
-        self.appIcon.setFixedWidth(60)
+        self.appIcon.setFixedWidth(60) 
 
-        icon_path = os.path.join(SCRIPT_DIR, "minimize.svg")
-        self.TBMinButton.setIcon(QIcon(icon_path))
+        iconPath: str = os.path.join(SCRIPT_DIR, "minimize.svg")
+        self.TBMinButton.setIcon(QIcon(iconPath))
         self.TBMinButton.setIconSize(QSize(25, 25))
         self.TBMinButton.setFixedHeight(titleBarHeight)
         self.TBMinButton.setFixedWidth(titleBarHeight+10)
@@ -382,8 +387,8 @@ class Window(QWidget):
         self.TBMaxButton.setFixedWidth(titleBarHeight+10)
         self.TBMaxButton.setObjectName("titleBarButton")
 
-        icon_path = os.path.join(SCRIPT_DIR, "close.svg")
-        self.TBCloseButton.setIcon(QIcon(icon_path))
+        iconPath: str = os.path.join(SCRIPT_DIR, "close.svg")
+        self.TBCloseButton.setIcon(QIcon(iconPath))
         self.TBCloseButton.setIconSize(QSize(25, 25))
         self.TBCloseButton.setFixedHeight(titleBarHeight)
         self.TBCloseButton.setFixedWidth(titleBarHeight+10)
@@ -419,15 +424,15 @@ class Window(QWidget):
         self.secondLimiter.setFixedHeight(1)
         self.secondLimiter.setObjectName("limiter")
 
-        eccButtonLayout = self.eccButtonLayout.layout()
-        eccButtonLayout.setContentsMargins(20, 0, 20, 40)
-        eccButtonLayout.setSpacing(0)
+        ecButtonLayout = self.ecButtonLayout.layout()
+        ecButtonLayout.setContentsMargins(20, 0, 20, 40)
+        ecButtonLayout.setSpacing(0)
 
-        self.eccButtonGroupTitle.setObjectName("ECCTitle")
+        self.ecButtonGroupTitle.setObjectName("ecTitle")
 
-        for button in self.eccButtonGroup.buttons():
-            button.setObjectName("ECCButton")
-        self.eccHighButton.setProperty("position", "last")
+        for button in self.ecButtonGroup.buttons():
+            button.setObjectName("ecButton")
+        self.ecHighButton.setProperty("position", "last")
 
         self.workingAreaLimiter.setFixedWidth(1)
         self.workingAreaLimiter.setObjectName("limiter")
@@ -443,9 +448,9 @@ class Window(QWidget):
         self.qrCodeText.setObjectName("QRCodeText")
         self.qrCodeText.setStyleSheet(f"font-size: {length/15}px")
 
-        icon_path = os.path.join(SCRIPT_DIR, "loading.svg")
+        iconPath: str = os.path.join(SCRIPT_DIR, "loading.svg")
         size = int(length/3)
-        self.qrCodeLoadingIcon.setPixmap(QPixmap(icon_path).scaled(size,size))
+        self.qrCodeLoadingIcon.setPixmap(QPixmap(iconPath).scaled(size,size))
         self.qrCodeLoadingIcon.hide()
 
         self.qrCodeButtonsLayout.setContentsMargins(0, 20, 0, 0)
@@ -454,22 +459,22 @@ class Window(QWidget):
         self.generateButton.setFixedSize(length-110, 50)
         self.generateButton.setObjectName("QRButton")
 
-        icon_path = os.path.join(SCRIPT_DIR, "download.svg")
-        self.downloadButton.setIcon(QIcon(icon_path))
+        iconPath: str = os.path.join(SCRIPT_DIR, "download.svg")
+        self.downloadButton.setIcon(QIcon(iconPath))
         self.downloadButton.setIconSize(QSize(32, 32))
         self.downloadButton.setFixedSize(50, 50)
         self.downloadButton.setObjectName("QRButton")
         self.downloadButton.setProperty("style", "small")
 
-        icon_path = os.path.join(SCRIPT_DIR, "copy.svg")
-        self.copyButton.setIcon(QIcon(icon_path))
+        iconPath: str = os.path.join(SCRIPT_DIR, "copy.svg")
+        self.copyButton.setIcon(QIcon(iconPath))
         self.copyButton.setIconSize(QSize(32, 32))
         self.copyButton.setFixedSize(50, 50)
         self.copyButton.setObjectName("QRButton")
         self.copyButton.setProperty("style", "small")
 
-        style_path = os.path.join(SCRIPT_DIR, "style.qss")
-        with open(style_path, mode="r", encoding="utf-8") as style:
+        stylePath = os.path.join(SCRIPT_DIR, "style.qss")
+        with open(stylePath, mode="r", encoding="utf-8") as style:
             self.setStyleSheet(style.read())
         
     def _calculateWindowGeometry(self) -> tuple[QPoint,int,int]:
@@ -503,20 +508,23 @@ class TitleBar(QWidget):
         self.oldClickPos = None
         self.newClickPos = None
 
+    @override
     def mousePressEvent(self, event) -> None:
         '''Triggered when the title bar is clicked by the mouse.'''
-        if event.button() == Qt.MouseButton.LeftButton:
+        if (event.button() == Qt.MouseButton.LeftButton):
             self.setMouseTracking(True)
             self.oldClickPos = QCursor.pos()
             self.windowStartPos = self.window().normalPos
     
+    @override
     def mouseReleaseEvent(self, event) -> None:
         '''Triggered when the title bar is released by the mouse.'''
-        if event.button() == Qt.MouseButton.LeftButton:
+        if (event.button() == Qt.MouseButton.LeftButton):
             self.setMouseTracking(False)
             self.oldClickPos = None
             self.windowStartPos = None
     
+    @override
     def mouseMoveEvent(self, event) -> None:
         '''Triggered when the mouse moves over the title bar'''
         if not(self.oldClickPos == None):
@@ -544,6 +552,7 @@ class TitleBar(QWidget):
                     window.normalPos = newPos
                     window.move(window.normalPos.x(), window.normalPos.y())
 
+    @override
     def mouseDoubleClickEvent(self, event) -> None:
         '''Triggered when the title bar is double clicked by the mouse.'''
         if event.button() == Qt.MouseButton.LeftButton:
@@ -551,7 +560,7 @@ class TitleBar(QWidget):
 
 class QRWorker:
     '''Class whose instance is ran in another process to generate the QR Code's rawData.'''
-    _instance: None | __class__ = None
+    _instance: None | Self = None
     _initialized: bool = False
 
     def __new__(cls, *args, **kwargs) -> Self:
@@ -560,14 +569,14 @@ class QRWorker:
             cls._instance = super().__new__(cls)
         return cls._instance
 
-    def __init__(self, text: str, eccLevel: int, resultQueue: Queue) -> None:
+    def __init__(self, text: str, ecLevel: int, resultQueue: Queue) -> None:
         '''Initializes the QRWorker.'''
         if self.__class__._initialized:
             print('Can only create one QRWorker at a time!')
             return
         else:
             self.text: str = text
-            self.eccLevel: int = eccLevel
+            self.ecLevel: int = ecLevel
             self.resultQueue: Queue = resultQueue
             self.__class__._initialized = True
 
@@ -576,30 +585,23 @@ class QRWorker:
         Generates the rawData that will be painted onto the QR Widget. 
         This function and all the following must execute in a separate process to prevent the GUI from freezing.
         '''
+        print('QRWorker running!')
         rawData: str = ''
         segments: list[tuple[str, str, str]] = []
-        currentSegment: list = []
-        currentMode: None | int = None
-        modeBits: dict[int, str] = {
-            1:'0001',
-            2:'0010',
-            3:'0100',
-            4:'1000',
-        }
+        currentMode: None | Mode = None
 
         for char in self.text:
-            mode: int = ModeFinder.findMode(char)
-            if not(0 < mode < 5):
+            mode: Mode = Mode.findMode(char)
+            if (mode == Mode.ERROR):
                 # A character has failed to encode, mode is now equal to ord(char)
                 self.resultQueue.put((0, mode))
                 return
             elif (mode != currentMode):
                 if (currentMode):
-                    segments.append((modeBits[currentMode],  ''.join(currentSegment)))
+                    segments.append((mode.value,  ''.join(currentSegment)))
                 currentMode = mode
-                currentSegment = []
         
-        #sleep(100) #fake math
+        sleep(100) #fake math
         #self.resultQueue.put(self.rawData)
     
     @staticmethod
@@ -608,27 +610,32 @@ class QRWorker:
         __class__._instance = None
         __class__._initialized = False
             
-
-class ModeFinder:
-    '''Static class used for finding the mode of a given string acording to QR Code mode encoding.'''
+class Mode(Enum):
+    '''Static class used for finding the mode of a given character acording to QR Code mode encoding.'''
+    NUMERIC = '0001'
+    ALPHANUM = '0010'
+    BYTE = '0100'
+    KANJI = '1000'
+    ERROR = 0
+    # might create a custom Enum class for errors.
 
     @staticmethod
-    def findMode(char: str) -> int:
+    def findMode(char: str) -> Mode:
         '''
         Returns the mode that will be used to encode the given character, between
         numeric, alphanum, byte, and kanji.
-        Returns  if the character cannot be encoded using any of the four modes.
+        Returns Mode.ERROR if the character cannot be encoded using any of the four modes.
         '''
-        if (ModeFinder.isNumeric(char)):
-            return 1
-        elif (ModeFinder.isAlphanum(char)):
-            return 2
-        elif (ModeFinder.isByte(char)):
-            return 3
-        elif (ModeFinder.isKanji(char)):
-            return 4
+        if (Mode.isNumeric(char)):
+            return Mode.NUMERIC
+        elif (Mode.isAlphanum(char)):
+            return Mode.ALPHANUM
+        elif (Mode.isByte(char)):
+            return Mode.BYTE
+        elif (Mode.isKanji(char)):
+            return Mode.KANJI
         else:
-            return ord(char)
+            return Mode.ERROR
     
     @staticmethod
     def isNumeric(char: str) -> bool:
