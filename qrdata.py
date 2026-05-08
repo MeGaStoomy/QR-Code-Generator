@@ -1,12 +1,22 @@
+'''
+This file is a collection of constants and methods that would otherwise clutter up
+the main script.
+They are all related to information, data, and specifities about QR Codes, such as their
+capacities, lengths, sizes, etc.
+'''
+
+############################
+
+############################
+
 # QR code character capacities
 # Structure: capacities[version][error_correction][mode]
 # version: 1–40 (index 0 = version 1)
-# error_correction: 1=L, 2=M, 3=Q, 4=H
-# mode: 1=Numeric, 2=Alphanumeric, 3=Byte, 4=Kanji
+# error_correction: 0=L, 1=M, 2=Q, 3=H
+# mode: 0=Numeric, 1=Alphanumeric, 2=Byte, 3=Kanji
 # Generated using Claude AI, from https://www.thonky.com/qr-code-tutorial/character-capacities
 
-QR_CAPACITIES = [
-    # [L, M, Q, H] each = [Numeric, Alphanumeric, Byte, Kanji]
+_QR_CAPACITIES: list[list[list[int]]] = [
     [[41,25,17,10],[34,20,14,8],[27,16,11,7],[17,10,7,4]],        # v1
     [[77,47,32,20],[63,38,26,16],[48,29,20,12],[34,20,14,8]],     # v2
     [[127,77,53,32],[101,61,42,26],[77,47,32,20],[58,35,24,15]],  # v3
@@ -49,9 +59,50 @@ QR_CAPACITIES = [
     [[7089,4296,2953,1817],[5596,3391,2331,1435],[3993,2420,1663,1024],[3057,1852,1273,784]],# v40
 ]
 
-def getCapacity(version: int, eccLevel: int, mode: int) -> int:
+modeMap: dict[str, int] = {
+        '0001':0,
+        '0010':1,
+        '0100':2,
+        '1000':3,
+    }
+
+def getCapacity(version: int, ecLevel: int, mode: str) -> int:
     '''Returns the capacity of a QR Code given the specific version, eccLevel, and mode.'''
-    return QR_CAPACITIES[version - 1][eccLevel - 1][mode - 1]
+    return _QR_CAPACITIES[version - 1][ecLevel - 1][modeMap[mode]]
+
+############################
+
+############################
+
+# QR code character count indicator (cci) lengths
+# Structure: cciLength[version][mode]
+# version: 1–40 (index 0 = version 1)
+# mode: 0=Numeric, 1=Alphanumeric, 2=Byte, 3=Kanji
+# Generated using Claude AI, from https://www.thonky.com/qr-code-tutorial/character-capacities
+
+_CCI_LENGTHS: list[list[int]] = [
+    [10,9,8,8],
+    [12,11,16,10],
+    [14,13,16,12]
+]
+
+def getCCILength(version: int, mode: str) -> int:
+    '''Returns the length of the character count indicator given the specific version and mode.'''
+    if (1 <= version <= 9):
+        return _CCI_LENGTHS[0][modeMap[mode]]
+    elif (10 <= version <= 26):
+        return _CCI_LENGTHS[1][modeMap[mode]]
+    elif (27 <= version <= 40):
+        return _CCI_LENGTHS[2][modeMap[mode]]
+    else:
+        raise ValueError('Version must be between 1 and 40!')
+    
+############################
+
+############################
+
+
+    
 
 if __name__ == '__main__':
     print(getCapacity(1, 1, 4))   # → 10

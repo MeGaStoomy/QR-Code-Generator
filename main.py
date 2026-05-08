@@ -12,9 +12,9 @@ Slowed down progress from April 6th 2026 to April 27th 2026
 import os
 import sys
 import ctypes
-from capacities import getCapacity
+import qrdata
 from typing import Self, Any, override
-from time import sleep, time
+from time import sleep, time, perf_counter
 from enum import Enum, auto
 from PyQt6.QtWidgets import (
     QApplication,
@@ -78,8 +78,8 @@ class Application(QApplication):
         self.qrWorker: QRWorker | None = None
         self.qrProcess: Process | None = None
     
-    def createQRProcess(self) -> None:
-        '''Creates and starts a process, in which the QR Code's rawData will be generated.'''
+    def startQRProcess(self) -> None:
+        '''Creates and starts a process, in which the QR Code's encodedData will be generated.'''
         window: Window = self.program.window
         window.disableQRCodeLayout()
         text = window.textEntry.toPlainText()
@@ -103,37 +103,43 @@ class Application(QApplication):
                 print('Process timed out!')
                 self.terminateQRProcess()
             elif not(self.resultQueue.empty()):
-                rawData: list | tuple = self.terminateQRProcess(getRawData=True)
-                if (type(rawData) == list):
+                encodedData: list | tuple = self.terminateQRProcess(getData=True)
+                if (type(encodedData) == list):
                     # No errors, continue normally.
                     print('No errors occured during generation.')
-                elif (type(rawData) == tuple):
-                    # An error occured, rawData: tuple[errorCode: int, *args].
-                    errorCode: int = rawData[0]
-                    if (errorCode == 0):
-                        # Error during encoding of a character, rawData: tuple[0, character that failed]
-                        failedChar: str = chr(rawData[1])
+                elif (type(encodedData) == tuple):
+                    # An error occured, encodedData: tuple[errorCode: int, any number of elements of any type].
+                    errorCode: int = encodedData[0]
+                    if (errorCode == QRException.QueueGetError.value):
+                        # Error when trying to get encodedData from self.resultQueue.
+                        # encodedData: tuple[errorCode,]
+                        print('Error while retrieving encodedData from the Queue!')
+                    elif (errorCode == QRException.ModeError.value):
+                        # Error during encoding of a character. 
+                        # encodedData: tuple[errorCode, ord of character that failed]
+                        failedChar: str = chr(encodedData[1])
                         print(failedChar + ' cannot be encoded using any of the four available modes!')
                 
     
-    def terminateQRProcess(self, getRawData: bool = False) -> None | list | tuple:
+    def terminateQRProcess(self, getData: bool = False) -> None | list | tuple:
         '''
         Properly terminates the QR Process and everything related, 
-        and retrieves data from the queue if needed, in which case rawData
-        should be a list, or an integer if an error occured during generation.
+        and returns None.
+        If getData is True, retrieves data from the queue, in which case the return
+        value should be a list, or a QRException.
         '''
         self.checkTimer.stop()
         self.qrProcess.terminate()
-        rawData: None | list | tuple = None
-        if (getRawData):
+        encodedData: None | list | tuple = None
+        if (getData):
             try: 
-                rawData = self.resultQueue.get(block=False, timeout=5000)
+                encodedData = self.resultQueue.get(block=False, timeout=5000)
             except TimeoutError:
-                print('Error while retrieving rawData from the Queue!')
+                encodedData = (QRException.QueueGetError.value,)
         self.resultQueue = None
         self.qrWorker.resetClass()
         self.program.window.enableQRCodeLayout()
-        return rawData
+        return encodedData
 
 class Window(QWidget):
     def __init__(self, program: Program):
@@ -195,6 +201,20 @@ class Window(QWidget):
                 ctypes.byref(ctypes.c_int(DWMWCP_ROUND)),
                 ctypes.sizeof(ctypes.c_int)
             )
+    
+    def loadIcon(self, path: str) -> QIcon:
+        '''Generates the QIcon used as the app's icon in the taskbar and such.'''
+        icon: QIcon = QIcon()
+        source: QPixmap = QPixmap(path)
+        for size in range(1, 257):
+            # I'm generating 256 different icons of resolution (size, size) just so I can be free of mind
+            scaled: QPixmap = source.scaled(
+                size, size,
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.FastTransformation
+            )
+            icon.addPixmap(scaled)
+        return icon
 
     def _setupWindowGeometry(self) -> None:
         '''Creates and sets up the window geometry.'''
@@ -289,7 +309,7 @@ class Window(QWidget):
         
         self.generateButton = QPushButton("Generate")
         self.generateButton.setAutoDefault(False)
-        self.generateButton.clicked.connect(self.program.app.createQRProcess)
+        self.generateButton.clicked.connect(self.program.app.startQRProcess)
 
         self.downloadButton = QPushButton()
         self.downloadButton.setAutoDefault(False)
@@ -355,8 +375,8 @@ class Window(QWidget):
     
     def _stylizeWidgets(self) -> None:
         '''Applies all of the style to all the widgets/layouts'''
-        iconPath: str = os.path.join(SCRIPT_DIR, r"icon.ico")
-        self.setWindowIcon(QIcon(iconPath))
+        iconPath: str = os.path.join(SCRIPT_DIR, r"runtime-icon.png")
+        self.setWindowIcon(self.loadIcon(iconPath))
         self.setWindowTitle('QR Code Generator - Waiting')
 
         titleBarHeight: int = self.titleBar.height()
@@ -493,10 +513,10 @@ class QRWidget(QWidget):
         '''Initializes the special QWidget that displays the QR Code.'''
         super().__init__()
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-        self.rawData = None
+        self.encodedData = None
 
     def paintQRCode(self) -> None:
-        '''Paints the QR Code onto the widget, as long as there is rawData to use.'''
+        '''Paints the QR Code onto the widget, as long as there is encodedData to use.'''
         raise NotImplementedError()
 
 class TitleBar(QWidget):
@@ -559,7 +579,7 @@ class TitleBar(QWidget):
             self.window().maximize(event)
 
 class QRWorker:
-    '''Class whose instance is ran in another process to generate the QR Code's rawData.'''
+    '''Class whose instance is ran in another process to generate the QR Code's encodedData.'''
     _instance: None | Self = None
     _initialized: bool = False
 
@@ -579,30 +599,52 @@ class QRWorker:
             self.ecLevel: int = ecLevel
             self.resultQueue: Queue = resultQueue
             self.__class__._initialized = True
-
+    
     def generateQRCode(self) -> None:
         '''
-        Generates the rawData that will be painted onto the QR Widget. 
+        Generates the encodedData that will be painted onto the QR Widget. 
         This function and all the following must execute in a separate process to prevent the GUI from freezing.
         '''
-        print('QRWorker running!')
-        rawData: str = ''
-        segments: list[tuple[str, str, str]] = []
-        currentMode: None | Mode = None
+        start = perf_counter()
 
+        #print('QRWorker running!')
+        encodedData: list[list[str]] = []
+
+        #### Figure out the appropriate encoding mode ####
+
+        mode: Mode = Mode.NUMERIC
         for char in self.text:
-            mode: Mode = Mode.findMode(char)
-            if (mode == Mode.ERROR):
-                # A character has failed to encode, mode is now equal to ord(char)
-                self.resultQueue.put((0, mode))
+            newMode: Mode | QRException = Mode.findMode(char)
+            if (newMode == QRException.ModeError):
+                # There is a character with no available encoding mode.
+                self.resultQueue.put((QRException.ModeError.value, ord(char)))
                 return
-            elif (mode != currentMode):
-                if (currentMode):
-                    segments.append((mode.value,  ''.join(currentSegment)))
-                currentMode = mode
+            elif (newMode.value > mode.value):
+                mode = newMode
         
-        sleep(100) #fake math
-        #self.resultQueue.put(self.rawData)
+        #### Figure out the appropriate QR Code version ####
+
+        textLength: int = len(self.text)
+        version: int = 1
+        foundVersion: bool = False
+        while not(foundVersion):
+            if (qrdata.getCapacity(version, self.ecLevel, mode.value) >= textLength):
+                foundVersion = True
+            else:
+                version += 1
+        
+        #### Create the character count indicator ####
+
+        cciLength: int = qrdata.getCCILength(version, mode.value)
+        cci: str = str(bin(textLength))[2:]
+        cci = '0' * (cciLength-len(cci)) + cci
+
+        #print(cci)
+
+        #sleep(100) #fake math
+        self.resultQueue.put([])
+
+        print(f'Time taken: {perf_counter()-start:.6f} seconds')
     
     @staticmethod
     def resetClass() -> None:
@@ -616,11 +658,9 @@ class Mode(Enum):
     ALPHANUM = '0010'
     BYTE = '0100'
     KANJI = '1000'
-    ERROR = 0
-    # might create a custom Enum class for errors.
 
     @staticmethod
-    def findMode(char: str) -> Mode:
+    def findMode(char: str) -> Mode | QRException:
         '''
         Returns the mode that will be used to encode the given character, between
         numeric, alphanum, byte, and kanji.
@@ -635,7 +675,7 @@ class Mode(Enum):
         elif (Mode.isKanji(char)):
             return Mode.KANJI
         else:
-            return Mode.ERROR
+            return QRException.ModeError
     
     @staticmethod
     def isNumeric(char: str) -> bool:
@@ -675,6 +715,69 @@ class Mode(Enum):
 
         code = int.from_bytes(b, 'big')
         return (0x8140 <= code <= 0x9FFC) or (0xE040 <= code <= 0xEAFC)
+
+class Encoder(Enum):
+    '''Static class used for encoding a given string using a specific Mode.'''
+
+    @staticmethod
+    def encode(text: str, mode: Mode) -> str | QRException:
+        '''
+        Returns the string corresponding to the given character's 
+        encoded value in binary, depending on the given Mode.
+        '''
+        try:
+            if (mode == Mode.NUMERIC):
+                return Encoder.encodeNumeric(text)
+            elif (mode == Mode.ALPHANUM):
+                return Encoder.encodeAlphanum(text)
+            elif (mode == Mode.BYTE):
+                return Encoder.encodeByte(text)
+            else:
+                return Encoder.encodeKanji(text)
+        except:
+            return QRException.EncodeError
+    
+    @staticmethod
+    def encodeNumeric(text: str) -> str:
+        '''
+        Returns the string corresponding to the given character's 
+        encoded value in binary using numeric encoding.
+        '''
+        result: str = ''
+        group: str = ''
+        i: int = 3
+        while (i < len(text)):
+            group = text[:i]
+
+    
+    @staticmethod
+    def encodeAlphanum(text: str) -> str:
+        '''
+        Returns the string corresponding to the given character's 
+        encoded value in binary using alphanumeric encoding.
+        '''
+        pass
+    
+    @staticmethod
+    def encodeByte(text: str) -> str:
+        '''
+        Returns the string corresponding to the given character's 
+        encoded value in binary using byte encoding.
+        '''
+        pass
+    
+    @staticmethod
+    def encodeKanji(text: str) -> str:
+        '''
+        Returns the string corresponding to the given character's 
+        encoded value in binary using kanji encoding.
+        '''
+        pass
+
+class QRException(Enum):
+    QueueGetError = auto()
+    ModeError = auto()
+    EncodeError = auto()
 
 if __name__ == '__main__':
     freeze_support()
