@@ -14,6 +14,7 @@ import sys
 import ctypes
 import qrdata
 from typing import Self, Any, override
+from dataclasses import dataclass
 from time import sleep, time, perf_counter
 from enum import Enum, auto
 from PyQt6.QtWidgets import (
@@ -49,7 +50,6 @@ from multiprocessing import (
     freeze_support,
 )
 
-global SCRIPT_DIR
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("stoomy.qrcodegen")
 
@@ -63,83 +63,92 @@ class Program:
     def execute(self) -> None:
         '''Executes the program.'''
         self.window.show()
+        self.app.createQRProcess()
         self.app.exec()
 
 class Application(QApplication):
     def __init__(self, program: Program):
         super().__init__([])
         self.program: Program = program
-        self.text: str | None = None
-        self.ecLevel: int | None = None
-        self.resultQueue: Queue | None = None
+        self.taskQueue: Queue = Queue()
+        self.resultQueue: Queue = Queue()
         self.checkTimer: QTimer = QTimer(self)
         self.checkTimer.timeout.connect(self.checkQueue)
-        self.qrProcessStart: float | None = None
-        self.qrWorker: QRWorker | None = None
-        self.qrProcess: Process | None = None
+        self.qrProcessStart: None | float = None
     
-    def startQRProcess(self) -> None:
-        '''Creates and starts a process, in which the QR Code's encodedData will be generated.'''
+    def createQRProcess(self) -> None:
+        '''Creates and starts the QRProcess.'''
+        self.qrWorker: QRWorker = QRWorker(self.taskQueue, self.resultQueue)
+        self.qrProcess: Process = Process(target=self.qrWorker.standby, daemon=True)
+        self.qrProcess.start()
+        self.startCheckingQueue()
+    
+    def terminateQRProcess(self) -> None:
+        '''Properly terminates the QR Process and everything related.'''
+        self.stopCheckingQueue()
+        self.qrProcess.terminate()
+        self.qrWorker.resetClass()
+        self.program.window.enableQRCodeLayout()
+        return 
+    
+    def restartQRProcess(self) -> None:
+        '''Restarts the QRProcess.'''
+        self.terminateQRProcess()
+        self.createQRProcess()
+    
+    def startGeneration(self) -> None:
+        '''Tells the QRProcess to start generating the QR Code's qrCodeData'''
         window: Window = self.program.window
         window.disableQRCodeLayout()
-        text = window.textEntry.toPlainText()
+        text: str = window.textEntry.toPlainText()
         if (text == ''):
             print('Text cannot be empty!')
             window.enableQRCodeLayout()
             return
-        self.text = text
-        self.ecLevel = window.ecButtonGroup.checkedId()
-        self.resultQueue = Queue()
-        self.qrWorker = QRWorker(self.text, self.ecLevel, self.resultQueue)
-        self.qrProcess = Process(target=self.qrWorker.generateQRCode, daemon=True)
-        self.qrProcess.start()
+        ecLevel: int = window.ecButtonGroup.checkedId()
+        self.taskQueue.put((text, ecLevel))
+        self.startCheckingQueue()
+        
+    def startCheckingQueue(self) -> None:
+        '''Starts repeatedly checking the resultQueue.'''
         self.qrProcessStart = time()
         self.checkTimer.start(100)
     
     def checkQueue(self) -> None:
-        '''Checks the resultQueue to see whether the QRWorker has sent back something or not.'''
-        if not(self.resultQueue is None):
-            if (time() - self.qrProcessStart > 10):
-                print('Process timed out!')
-                self.terminateQRProcess()
-            elif not(self.resultQueue.empty()):
-                encodedData: list | tuple = self.terminateQRProcess(getData=True)
-                if (type(encodedData) == list):
-                    # No errors, continue normally.
+        '''Checks the resultQueue once to see whether the QRWorker has sent back something or not.'''
+        if (time() - self.qrProcessStart > 10):
+            print('Process timed out!')
+            self.restartQRProcess()
+        elif not(self.resultQueue.empty()):
+            response: QRRe = self.resultQueue.get()
+            if ():
+                # No errors, normal response.
+                if (response.success):
+                    # QRWorker has successfully started.
+                    window: Window = self.program.window
+                    window.enableQRCodeLayout()
+                    window.qrCodeText.setText('Waiting for input...')
+                    print('Successfully started QRWorker!')
+                else:
                     print('No errors occured during generation.')
-                elif (type(encodedData) == tuple):
-                    # An error occured, encodedData: tuple[errorCode: int, any number of elements of any type].
-                    errorCode: int = encodedData[0]
-                    if (errorCode == QRException.QueueGetError.value):
-                        # Error when trying to get encodedData from self.resultQueue.
-                        # encodedData: tuple[errorCode,]
-                        print('Error while retrieving encodedData from the Queue!')
-                    elif (errorCode == QRException.ModeError.value):
-                        # Error during encoding of a character. 
-                        # encodedData: tuple[errorCode, ord of character that failed]
-                        failedChar: str = chr(encodedData[1])
-                        print(failedChar + ' cannot be encoded using any of the four available modes!')
-                
+            elif (isinstance(qrCodeData, tuple)):
+                # An error occured, qrCodeData: tuple[errorCode: int, any number of elements of any type].
+                errorCode: int = qrCodeData[0]
+                if (errorCode == QRError.ModeError.value):
+                    # Error trying to find encoding mode of a character. 
+                    # qrCodeData: tuple[errorCode, ord(char)]
+                    failedChar: str = chr(qrCodeData[1])
+                    print(failedChar + ' cannot be encoded using any of the four available modes!')
+                elif (errorCode == QRError.EncodeError.value):
+                    # Error during encoding of the text.
+                    print('An error occured trying to encode the text!')
+            self.stopCheckingQueue()
+            self.program.window.enableQRCodeLayout()
     
-    def terminateQRProcess(self, getData: bool = False) -> None | list | tuple:
-        '''
-        Properly terminates the QR Process and everything related, 
-        and returns None.
-        If getData is True, retrieves data from the queue, in which case the return
-        value should be a list, or a QRException.
-        '''
+    def stopCheckingQueue(self) -> None:
+        '''Stops checking the resultQueue.'''
         self.checkTimer.stop()
-        self.qrProcess.terminate()
-        encodedData: None | list | tuple = None
-        if (getData):
-            try: 
-                encodedData = self.resultQueue.get(block=False, timeout=5000)
-            except TimeoutError:
-                encodedData = (QRException.QueueGetError.value,)
-        self.resultQueue = None
-        self.qrWorker.resetClass()
-        self.program.window.enableQRCodeLayout()
-        return encodedData
+        self.qrProcessStart = None
 
 class Window(QWidget):
     def __init__(self, program: Program):
@@ -303,19 +312,21 @@ class Window(QWidget):
         self.qrCode = QRWidget()
         self.qrCode.setLayout(QVBoxLayout())
 
-        self.qrCodeText = QLabel("Waiting for input...")
+        self.qrCodeText = QLabel("Please wait...")
 
         self.qrCodeLoadingIcon = QLabel()
         
         self.generateButton = QPushButton("Generate")
         self.generateButton.setAutoDefault(False)
-        self.generateButton.clicked.connect(self.program.app.startQRProcess)
+        self.generateButton.clicked.connect(self.program.app.startGeneration)
 
         self.downloadButton = QPushButton()
         self.downloadButton.setAutoDefault(False)
 
         self.copyButton = QPushButton()
         self.copyButton.setAutoDefault(False)
+
+        self.disableQRCodeLayout()
 
     def _placeAllWidgets(self) -> None:
         '''Places all the widgets into their respective layouts/positions.'''
@@ -513,10 +524,10 @@ class QRWidget(QWidget):
         '''Initializes the special QWidget that displays the QR Code.'''
         super().__init__()
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-        self.encodedData = None
+        self.qrCodeData = None
 
     def paintQRCode(self) -> None:
-        '''Paints the QR Code onto the widget, as long as there is encodedData to use.'''
+        '''Paints the QR Code onto the widget, as long as there is qrCodeData to use.'''
         raise NotImplementedError()
 
 class TitleBar(QWidget):
@@ -579,7 +590,7 @@ class TitleBar(QWidget):
             self.window().maximize(event)
 
 class QRWorker:
-    '''Class whose instance is ran in another process to generate the QR Code's encodedData.'''
+    '''Class whose instance is ran in another process to generate the QR Code's qrCodeData.'''
     _instance: None | Self = None
     _initialized: bool = False
 
@@ -587,62 +598,89 @@ class QRWorker:
         '''Ensures only one QRWorker can exist at a time.'''
         if cls._instance is None:
             cls._instance = super().__new__(cls)
-        return cls._instance
+        if (__name__ == '__main__'):
+            return cls._instance
 
-    def __init__(self, text: str, ecLevel: int, resultQueue: Queue) -> None:
+    def __init__(self, taskQueue: Queue, resultQueue: Queue) -> None:
         '''Initializes the QRWorker.'''
         if self.__class__._initialized:
             print('Can only create one QRWorker at a time!')
             return
         else:
-            self.text: str = text
-            self.ecLevel: int = ecLevel
+            self.taskQueue: Queue = taskQueue
             self.resultQueue: Queue = resultQueue
             self.__class__._initialized = True
     
-    def generateQRCode(self) -> None:
+    def standby(self) -> None:
+        '''Wait to be given a task to execute through the taskQueue.'''
+        self.resultQueue.put(QRMessage('Started'))
+        # Tells the main process that the child process has successfully started
+        while True:
+            task: QRTask = self.taskQueue.get()
+            task.foo(*task.args, **task.kwargs)
+    
+    def generateQRCode(self, text, ecLevel) -> None:
         '''
-        Generates the encodedData that will be painted onto the QR Widget. 
+        Generates the qrCodeData that will be painted onto the QR Widget. 
         This function and all the following must execute in a separate process to prevent the GUI from freezing.
         '''
+        print('===============')
+        print('Text :', text, '\nError Correction Level :', ecLevel)
         start = perf_counter()
 
-        #print('QRWorker running!')
-        encodedData: list[list[str]] = []
+        qrCodeData: list[list[str]] = []
+        rawData: str = ''
 
         #### Figure out the appropriate encoding mode ####
 
         mode: Mode = Mode.NUMERIC
-        for char in self.text:
-            newMode: Mode | QRException = Mode.findMode(char)
-            if (newMode == QRException.ModeError):
+        for char in text:
+            newMode: Mode | QRError = Mode.findMode(char)
+            if (newMode == QRError.ModeError):
                 # There is a character with no available encoding mode.
-                self.resultQueue.put((QRException.ModeError.value, ord(char)))
+                self.resultQueue.put(QRResult(success=False, data=char, error=QRError.ModeError))
                 return
             elif (newMode.value > mode.value):
                 mode = newMode
+        rawData += mode.value
+        
+        print('Mode :', mode)
         
         #### Figure out the appropriate QR Code version ####
 
-        textLength: int = len(self.text)
+        textLength: int = len(text)
         version: int = 1
         foundVersion: bool = False
         while not(foundVersion):
-            if (qrdata.getCapacity(version, self.ecLevel, mode.value) >= textLength):
+            if (qrdata.getCapacity(version, ecLevel, mode.value) >= textLength):
                 foundVersion = True
             else:
                 version += 1
+        
+        print('Version :', version)
         
         #### Create the character count indicator ####
 
         cciLength: int = qrdata.getCCILength(version, mode.value)
         cci: str = str(bin(textLength))[2:]
         cci = '0' * (cciLength-len(cci)) + cci
+        rawData += cci
 
-        #print(cci)
+        print('Character Count Indicator :', cci)
 
-        #sleep(100) #fake math
-        self.resultQueue.put([])
+        #### Encode the data using the selected mode ####
+
+        encodedData: str | QRError = Encoder.encode(text, mode)
+        if (encodedData == QRError.EncodeError):
+            self.resultQueue.put((QRError.EncodeError.value,))
+            return
+        rawData += encodedData
+
+        print('Encoded Data :', encodedData)
+
+        sleep(100) #fake math
+        self.resultQueue.put([0])
+        # Temporary, will replace [0] with qrCodeData once this code is finished.
 
         print(f'Time taken: {perf_counter()-start:.6f} seconds')
     
@@ -651,7 +689,7 @@ class QRWorker:
         '''Resets the class attributes to their default values.'''
         __class__._instance = None
         __class__._initialized = False
-            
+
 class Mode(Enum):
     '''Static class used for finding the mode of a given character acording to QR Code mode encoding.'''
     NUMERIC = '0001'
@@ -660,7 +698,7 @@ class Mode(Enum):
     KANJI = '1000'
 
     @staticmethod
-    def findMode(char: str) -> Mode | QRException:
+    def findMode(char: str) -> Mode | QRError:
         '''
         Returns the mode that will be used to encode the given character, between
         numeric, alphanum, byte, and kanji.
@@ -675,7 +713,7 @@ class Mode(Enum):
         elif (Mode.isKanji(char)):
             return Mode.KANJI
         else:
-            return QRException.ModeError
+            return QRError.ModeError
     
     @staticmethod
     def isNumeric(char: str) -> bool:
@@ -685,12 +723,7 @@ class Mode(Enum):
     @staticmethod
     def isAlphanum(char: str) -> bool:
         '''Returns whether the given character is alphanumeric according to QR Code encoding modes.'''
-        charList: list[str] = (
-                [str(num) for num in range(10)] + 
-                [chr(char) for char in range(ord('A'), ord('Z')+1)] +
-                [' ', '$', '%', '*', '+', '-', '.', '/', ':']
-        )
-        if not(char in charList):
+        if not(char in Table.ALPHANUM.value):
             return False
         return True
 
@@ -714,15 +747,17 @@ class Mode(Enum):
             return False  # Must be a 2-byte Shift-JIS character
 
         code = int.from_bytes(b, 'big')
-        return (0x8140 <= code <= 0x9FFC) or (0xE040 <= code <= 0xEAFC)
+        # saves the character's byte value for Kanji encoding later on, 
+        # meaning IF AND ONLY IF this function returns True.
+        return (0x8140 <= code <= 0x9FFC) or (0xE040 <= code <= 0xEBBF)
 
-class Encoder(Enum):
+class Encoder:
     '''Static class used for encoding a given string using a specific Mode.'''
 
     @staticmethod
-    def encode(text: str, mode: Mode) -> str | QRException:
+    def encode(text: str, mode: Mode) -> str | QRError:
         '''
-        Returns the string corresponding to the given character's 
+        Returns the string corresponding to the given text's 
         encoded value in binary, depending on the given Mode.
         '''
         try:
@@ -734,8 +769,8 @@ class Encoder(Enum):
                 return Encoder.encodeByte(text)
             else:
                 return Encoder.encodeKanji(text)
-        except:
-            return QRException.EncodeError
+        except Exception:
+            return QRError.EncodeError
     
     @staticmethod
     def encodeNumeric(text: str) -> str:
@@ -744,10 +779,21 @@ class Encoder(Enum):
         encoded value in binary using numeric encoding.
         '''
         result: str = ''
-        group: str = ''
-        i: int = 3
-        while (i < len(text)):
-            group = text[:i]
+        start: int = 0
+        while (start < len(text)):
+            currentGroup: int = int(text[start:start+3])
+            groupBin: str = str(bin(currentGroup))[2:]
+            lenGroup: int = len(str(currentGroup))
+            if (lenGroup == 3):
+                groupBin = '0'*(10-len(groupBin)) + groupBin
+            elif (lenGroup == 2):
+                groupBin = '0'*(7-len(groupBin)) + groupBin
+            else:
+                groupBin = '0'*(4-len(groupBin)) + groupBin
+            #print(groupBin)
+            result += groupBin
+            start += 3
+        return result
 
     
     @staticmethod
@@ -756,7 +802,24 @@ class Encoder(Enum):
         Returns the string corresponding to the given character's 
         encoded value in binary using alphanumeric encoding.
         '''
-        pass
+        result: str = ''
+        start: int = 0
+        while (start < len(text)):
+            currentGroup: str = text[start:start+2]
+            charList: list[str] = Table.ALPHANUM.value
+            if (len(currentGroup) == 1):
+                groupBin: str = str(bin(charList.index(currentGroup)))[2:]
+                groupBin = '0'*(6-len(groupBin)) + groupBin
+            else:
+                groupBin: str = str(bin( 
+                    45*charList.index(currentGroup[0]) +  charList.index(currentGroup[1])
+                ))[2:]
+                groupBin = '0'*(11-len(groupBin)) + groupBin
+            result += groupBin
+            start += 2
+            print(groupBin)
+        return result
+
     
     @staticmethod
     def encodeByte(text: str) -> str:
@@ -772,11 +835,47 @@ class Encoder(Enum):
         Returns the string corresponding to the given character's 
         encoded value in binary using kanji encoding.
         '''
-        pass
+        result: str = ''
+        for char in text:
+            charByte: int = int.from_bytes(char.encode('shift_jis'), 'big')
+            if (0x8140 <= charByte <= 0x9FFC):
+                newVal: int = charByte - 0x8140
+                print(newVal)
+            elif (0xE040 <= charByte <= 0XEBBF):
+                ...
+            else:
+                raise ValueError('Text contains an invalid character!')
 
-class QRException(Enum):
-    QueueGetError = auto()
+@dataclass(frozen=True)
+class QRMessage:
+    '''Message to be sent over a multiprocessing queue during IPC'''
+    message: str
+
+@dataclass(frozen=True)
+class QRTask:
+    '''Tasks to be given to a child process over a multiprocessing queue during IPC'''
+    foo: function
+    args: tuple = ()
+    kwargs: dict = {}
+
+@dataclass(frozen=True)
+class QRResult:
+    '''Message to be sent over a multiprocessing queue during IPC once a task is finished'''
+    success: bool
+    data: list | None = None
+    error: QRError | None = None
+
+class Table(Enum):
+    '''Enum used for storing the lists of characters allowed in a mode, when needed.'''
+    ALPHANUM = (
+                [str(num) for num in range(10)] + 
+                [chr(char) for char in range(ord('A'), ord('Z')+1)] +
+                [' ', '$', '%', '*', '+', '-', '.', '/', ':']
+    )
+
+class QRError(Enum):
     ModeError = auto()
+    
     EncodeError = auto()
 
 if __name__ == '__main__':
