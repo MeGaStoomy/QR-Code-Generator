@@ -10,6 +10,12 @@ https://www.thonky.com/qr-code-tutorial/, whom I both give credit to.
 
 from typing import NamedTuple
 
+ALPHANUM_CHARS = (
+                [str(num) for num in range(10)] + 
+                [chr(char) for char in range(ord('A'), ord('Z')+1)] +
+                [' ', '$', '%', '*', '+', '-', '.', '/', ':']
+    )
+
 ############################
 
 ############################

@@ -19,6 +19,10 @@ TitleBar {
     background-color: #1a1222; 
 }
 
+QMenu::item:disabled {
+    color: gray;
+}
+
 #userInputTitle { 
     qproperty-alignment: AlignCenter; 
     border: none;
@@ -95,6 +99,11 @@ QRWidget[state="filled"] {
     background-color: rgb(45, 16, 58);
     border-radius: 20px;
     font-size: 15px;
+}
+
+#QRButton:disabled {
+    background-color: rgb(67, 52, 74);
+    color: lightgray;
 }
 
 #QRButton:hover {
