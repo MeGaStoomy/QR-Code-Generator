@@ -58,7 +58,13 @@ from multiprocessing import (
     freeze_support,
 )
 
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+if getattr(sys, 'frozen', False):
+    # running as a compiled binary
+    SCRIPT_DIR: str = os.path.dirname(sys.executable)
+else:
+    # running as normal python
+    SCRIPT_DIR: str = os.path.dirname(os.path.abspath(__file__))
+RESOURCES_DIR: str = os.path.join(SCRIPT_DIR, 'resources')
 ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("stoomy.qrcodegen")
 
 
@@ -258,68 +264,68 @@ class Window(QWidget):
 
     def _initLayout(self) -> None:
         '''Initializes all the layouts that will automatically arrange all the widgets in the window.'''
-        self.outerLayout = QVBoxLayout()
+        self.outerLayout: QVBoxLayout = QVBoxLayout()
 
-        self.titleBarLayout = QHBoxLayout()
+        self.titleBarLayout: QHBoxLayout = QHBoxLayout()
         
-        self.workingAreaLayout = QHBoxLayout()
+        self.workingAreaLayout: QHBoxLayout = QHBoxLayout()
         
-        self.userInputLayout = QWidget()
+        self.userInputLayout: QWidget = QWidget()
         self.userInputLayout.setLayout(QVBoxLayout())
 
-        self.textEntryLayout = QWidget()
+        self.textEntryLayout: QWidget = QWidget()
         self.textEntryLayout.setLayout(QVBoxLayout())
 
-        self.ecButtonLayout = QWidget()
+        self.ecButtonLayout: QWidget = QWidget()
         self.ecButtonLayout.setLayout(QVBoxLayout())
 
-        self.qrCodeLayout = QWidget()
+        self.qrCodeLayout: QWidget = QWidget()
         self.qrCodeLayout.setLayout(QVBoxLayout())
 
-        self.qrCodeButtonsLayout = QHBoxLayout()
+        self.qrCodeButtonsLayout: QHBoxLayout = QHBoxLayout()
 
     def _createTitleBarWidgets(self) -> None:
         '''Creates the title bar and the widgets that will make it up'''
-        self.titleBar = TitleBar(self)
+        self.titleBar: TitleBar = TitleBar(self)
 
-        self.appIcon = QLabel()
+        self.appIcon: QLabel = QLabel()
 
-        self.appTitle = QLabel("QR Code Generator - Waiting")
+        self.appTitle: QLabel = QLabel("QR Code Generator - Waiting")
 
-        self.TBMinButton = QPushButton()
+        self.TBMinButton: QPushButton = QPushButton()
         self.TBMinButton.clicked.connect(self.showMinimized)
 
-        self.TBMaxButton = QPushButton()
+        self.TBMaxButton: QPushButton = QPushButton()
         self.TBMaxButton.clicked.connect(self.maximize)
 
-        self.TBCloseButton = QPushButton()
+        self.TBCloseButton: QPushButton = QPushButton()
         self.TBCloseButton.clicked.connect(self.close)
 
-        self.outerLimiter = QWidget()
+        self.outerLimiter: QWidget = QWidget()
 
     def _createWorkingAreaWidgets(self) -> None:
         '''Creates the widgets that will make up the middle of the window, excluding the top bar, AKA the "Working Area".'''
-        self.userInputTitle = QLabel("QR CODE GENERATOR")
+        self.userInputTitle: QLabel = QLabel("QR CODE GENERATOR")
 
-        self.firstLimiter = QWidget()
+        self.firstLimiter: QWidget = QWidget()
 
-        self.textEntryTitle = QLabel("Text :")
+        self.textEntryTitle: QLabel = QLabel("Text :")
 
-        self.textEntry = QTextEdit()
+        self.textEntry: QTextEdit = QTextEdit()
         self.textEntry.setPlaceholderText("Text to encode goes here...")
         self.textEntry.setAcceptRichText(False)
         self.textEntry.setReadOnly(False)
 
-        self.secondLimiter = QWidget()
+        self.secondLimiter: QWidget = QWidget()
 
-        self.ecButtonGroupTitle = QLabel("Error Correction Level :")
+        self.ecButtonGroupTitle: QLabel = QLabel("Error Correction Level :")
         
-        self.ecLowButton = QPushButton("Level L (Low) : Up to 7% data recovery.")
-        self.ecMediumButton = QPushButton("Level M (Medium) : Up to 15% data recovery.")
-        self.ecQuartileButton = QPushButton("Level Q (Quartile) : Up to 25% data recovery.")
-        self.ecHighButton = QPushButton("Level H (High) : Up to 30% data recovery.")
+        self.ecLowButton: QPushButton = QPushButton("Level L (Low) : Up to 7% data recovery.")
+        self.ecMediumButton: QPushButton = QPushButton("Level M (Medium) : Up to 15% data recovery.")
+        self.ecQuartileButton: QPushButton = QPushButton("Level Q (Quartile) : Up to 25% data recovery.")
+        self.ecHighButton: QPushButton = QPushButton("Level H (High) : Up to 30% data recovery.")
 
-        self.ecButtonGroup = QButtonGroup()
+        self.ecButtonGroup: QButtonGroup = QButtonGroup()
         self.ecButtonGroup.addButton(self.ecLowButton, 1)
         self.ecButtonGroup.addButton(self.ecMediumButton, 2)
         self.ecButtonGroup.addButton(self.ecQuartileButton, 3)
@@ -328,23 +334,23 @@ class Window(QWidget):
             button.setCheckable(True)
         self.ecMediumButton.setChecked(True)
 
-        self.workingAreaLimiter = QWidget()
+        self.workingAreaLimiter: QWidget = QWidget()
 
-        self.qrCode = QRWidget()
+        self.qrCode: QRWidget = QRWidget()
         self.qrCode.setLayout(QVBoxLayout())
 
-        self.qrCodeText = QLabel()
+        self.qrCodeText: QLabel = QLabel()
 
-        self.qrCodeLoadingIcon = QLabel()
+        self.qrCodeLoadingIcon: QLabel = QLabel()
 
-        self.generateButton = QPushButton("Generate")
+        self.generateButton: QPushButton = QPushButton("Generate")
         self.generateButton.setAutoDefault(False)
         self.generateButton.clicked.connect(self.program.app.startGeneration)
 
-        self.downloadButton = QPushButton()
+        self.downloadButton: QPushButton = QPushButton()
         self.downloadButton.setAutoDefault(False)
 
-        self.copyButton = QPushButton()
+        self.copyButton: QPushButton = QPushButton()
         self.copyButton.setAutoDefault(False)
 
         self.disableQRCodeLayout()
@@ -407,7 +413,7 @@ class Window(QWidget):
     
     def _stylizeWidgets(self) -> None:
         '''Applies all of the style to all the widgets/layouts'''
-        iconPath: str = os.path.join(SCRIPT_DIR, r"runtime-icon.png")
+        iconPath: str = os.path.join(RESOURCES_DIR, r"runtime-icon.png")
         self.setWindowIcon(self.loadIcon(iconPath))
         self.setWindowTitle('QR Code Generator - Waiting')
 
@@ -419,12 +425,12 @@ class Window(QWidget):
         self.titleBarLayout.setContentsMargins(0, 0, 0, 0)
         self.titleBarLayout.setSpacing(0)
 
-        iconPath = os.path.join(SCRIPT_DIR, r"titlebar-icon.svg")
+        iconPath = os.path.join(RESOURCES_DIR, r"titlebar-icon.svg")
         self.appIcon.setPixmap(QPixmap(iconPath).scaled(25, 25))
         self.appIcon.setContentsMargins(15,0,15,0)
         self.appIcon.setFixedWidth(60) 
 
-        iconPath = os.path.join(SCRIPT_DIR, "minimize.svg")
+        iconPath = os.path.join(RESOURCES_DIR, "minimize.svg")
         self.minimizeIcon: QIcon = QIcon(iconPath)
         self.TBMinButton.setIcon(self.minimizeIcon)
         self.TBMinButton.setIconSize(QSize(25, 25))
@@ -432,9 +438,9 @@ class Window(QWidget):
         self.TBMinButton.setFixedWidth(titleBarHeight+10)
         self.TBMinButton.setObjectName("titleBarButton")
 
-        iconPath = os.path.join(SCRIPT_DIR, "maximize.svg")
+        iconPath = os.path.join(RESOURCES_DIR, "maximize.svg")
         self.maximizeIcon: QIcon = QIcon(iconPath)
-        iconPath = os.path.join(SCRIPT_DIR, "normalize.svg")
+        iconPath = os.path.join(RESOURCES_DIR, "normalize.svg")
         self.normalizeIcon: QIcon = QIcon(iconPath)
         self.TBMaxButton.setIcon(self.maximizeIcon)
         self.TBMaxButton.setIconSize(QSize(22, 22))
@@ -442,7 +448,7 @@ class Window(QWidget):
         self.TBMaxButton.setFixedWidth(titleBarHeight+10)
         self.TBMaxButton.setObjectName("titleBarButton")
 
-        iconPath = os.path.join(SCRIPT_DIR, "close.svg")
+        iconPath = os.path.join(RESOURCES_DIR, "close.svg")
         self.closeIcon: QIcon = QIcon(iconPath)
         self.TBCloseButton.setIcon(self.closeIcon)
         self.TBCloseButton.setIconSize(QSize(25, 25))
@@ -504,7 +510,7 @@ class Window(QWidget):
         self.qrCodeText.setObjectName("QRCodeText")
         self.qrCodeText.setStyleSheet(f"font-size: {length/15}px")
 
-        iconPath = os.path.join(SCRIPT_DIR, "loading.svg")
+        iconPath = os.path.join(RESOURCES_DIR, "loading.svg")
         size: int = int(length/3)
         self.qrCodeLoadingIcon.setPixmap(QPixmap(iconPath).scaled(size,size))
         self.qrCodeLoadingIcon.hide()
@@ -515,21 +521,21 @@ class Window(QWidget):
         self.generateButton.setFixedSize(length-110, 50)
         self.generateButton.setObjectName("QRButton")
 
-        iconPath = os.path.join(SCRIPT_DIR, "download.svg")
+        iconPath = os.path.join(RESOURCES_DIR, "download.svg")
         self.downloadButton.setIcon(QIcon(iconPath))
         self.downloadButton.setIconSize(QSize(32, 32))
         self.downloadButton.setFixedSize(50, 50)
         self.downloadButton.setObjectName("QRButton")
         self.downloadButton.setProperty("style", "small")
 
-        iconPath = os.path.join(SCRIPT_DIR, "copy.svg")
+        iconPath = os.path.join(RESOURCES_DIR, "copy.svg")
         self.copyButton.setIcon(QIcon(iconPath))
         self.copyButton.setIconSize(QSize(32, 32))
         self.copyButton.setFixedSize(50, 50)
         self.copyButton.setObjectName("QRButton")
         self.copyButton.setProperty("style", "small")
 
-        stylePath: str = os.path.join(SCRIPT_DIR, "style.qss")
+        stylePath: str = os.path.join(RESOURCES_DIR, "style.qss")
         with open(stylePath, mode="r", encoding="utf-8") as style:
             self.setStyleSheet(style.read())
         
@@ -549,7 +555,7 @@ class QRWidget(QWidget):
         '''Initializes the special QWidget that displays the QR Code.'''
         super().__init__()
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-        self.qrCodeData: None | Unknown = None
+        self.qrCodeData: None | list = None
 
     def paintQRCode(self) -> None:
         '''Paints the QR Code onto the widget, as long as there is qrCodeData to use.'''
