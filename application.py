@@ -7,10 +7,11 @@ This was made as a proof of skill and knowledge in both simple app making (with 
 with data (creating the QR CODE itself), and general Python knowledge.
 
 Lots of credits go to the guide found on this website, which explains the process very clearly: 
-https://www.thonky.com/qr-code-tutorial/
+https://www.thonky.com/qr-code-tutorial/, licensed under CC BY-NC 4.0.
 
 Began on March 10th 2026.
-Slowed down progress from April 6th 2026 to April 27th 2026
+Slowed down progress from April 6th 2026 to April 27th 2026.
+Paused from ~June 3rd 2026 to September 16th 2026 for High School final exams, and summer break.
 """
 import os
 import sys

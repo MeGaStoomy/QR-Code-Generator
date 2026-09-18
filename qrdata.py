@@ -5,7 +5,7 @@ They are all related to information, data, and specifities about QR Codes, such 
 capacities, lengths, sizes, etc.
 
 Most of the code was generated using Claude, and using values from 
-https://www.thonky.com/qr-code-tutorial/, whom I both give credit to.
+https://www.thonky.com/qr-code-tutorial/ (licensed under CC BY-NC 4.0), whom I both give credit to.
 '''
 
 from typing import NamedTuple

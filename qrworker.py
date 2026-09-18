@@ -1,5 +1,5 @@
 '''
-This file contains all the code related directly to the QR Worker and the methods it uses.
+This file contains all the code related directly to the QR Worker (AKA the QR Code generator) and the methods it uses.
 '''
 
 from enum import Enum
@@ -9,6 +9,7 @@ from multiprocessing import Queue
 from IPC_coms import QRMessage, QRTask, QRResult
 from qrdata import ALPHANUM_CHARS, getCapacity, getCCILength, getAlignPosList, ECInfo, getECInfo
 from qrerrors import QRError
+from reed_solomon import Polynomial, GaloisField
 
 class QRWorker:
     '''Class whose instance is ran in another process to generate the QR Code's qrCodeData.'''
@@ -33,7 +34,6 @@ class QRWorker:
     def idle(self) -> None:
         '''Wait to be given a task to execute through the taskQueue.'''
         self.resultQueue.put(QRMessage.ProcessStarted)
-        # Tells the main process that the child process has successfully started
         while True:
             task: QRTask = self.taskQueue.get()
             start = perf_counter()
@@ -117,9 +117,15 @@ class QRWorker:
         #### Error Correction Codewords creation ####
 
         print(ecInfo)
+        terms: list[list] = []
         for i in range(0, ecInfo.totalDataCodewords):
             codeword: str = rawData[i*8:i*8+8]
-            print(f'(codeword #{i+1}) {rawData[i*8:i*8+8]}')
+            print(f'(codeword #{i+1}) {codeword} ({int(codeword, 2)})')
+            terms.append([GaloisField.valToExp(int(codeword, 2)), ecInfo.totalDataCodewords-i-1])
+        messagePol: Polynomial = Polynomial(terms)
+        generatorPol: Polynomial = Polynomial.getGenerator(ecInfo.ecCodewordsPerBlock)
+        print("Message polynomial :", messagePol)
+        print("Generator polynomial :", generatorPol)
 
         #### End ####
 

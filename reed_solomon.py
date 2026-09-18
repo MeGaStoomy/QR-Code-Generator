@@ -2,7 +2,7 @@
 This file contains code related to the creation of Reed-Solomon error correcting codewords.
 '''
 
-from typing import NamedTuple
+from typing import NamedTuple, override
 
 class ReedSolomon:
     '''Static class used for any method related to error correction.'''
@@ -21,59 +21,55 @@ class Polynomial:
     }
     for i in range(0x2074, 0x207A):
         EXPONENT_CHARS[str(i-0x2070)] = chr(i)
+    for i in range(10, 256):
+        i = str(i)
+        exp: str = ''
+        for num in i: exp += EXPONENT_CHARS[num]
+        EXPONENT_CHARS[i] = exp
     ALPHA_CHAR: str = 'α'
-    GENERATOR_POLS: list[Polynomial] = []
-    # will get generated inside qrworker.
 
-    def __init__(self, terms: list[int] | None = None) -> None:
-        self.terms: list[int] = terms if terms else []
-        # self.terms is the list of integers where the ints represent each term's coefficient inside GF(256)
-        # for exemple, 35x^4+25x^3+98x^1 would be []
-            
-    def __repr__(self) -> str:
+    def __init__(self, terms: list[list]):
+        '''Initiates the polynomial.'''
+        self.terms: list[list] = terms if terms else []
+        # each tuple corresponds to a term within the polynomial, so α^34*x^48 is [[34, 48]].
+        # make sure to enter the EXPONENTS.
+
+    def __str__(self):
+        string: str = ""
+        for term in self.terms:
+            string += self.ALPHA_CHAR + self.EXPONENT_CHARS[str(term[0])] + 'x' + self.EXPONENT_CHARS[str(term[1])] + ' + '
+        return string[:-3]
+
+    def __repr__(self):
         return f'<Polynomial {self.__str__()}>'
 
-    def __str__(self) -> str:
-        n: int = len(self)
-        if (n == 0):
-            return '0'
-        else:
-            strResult: str = ''
-            for i in range(n-1):
-                if (self[i] != 0):
-                    strTerm: str = f'{'+' if self[i] > 0 else ''}'
-                    strTerm += str(self[i]) + 'x' + Polynomial._getStrExp(n-i-1)
-                    strResult += strTerm
-            strResult += f'+{Polynomial.ALPHA_CHAR + self._getStrExp(self[-1])}'
-            return strResult
-    
-    def __getitem__(self, pos):
-        return self.terms[pos]
-    
-    def __len__(self):
-        return len(self.terms)
+    def __mul__(self, other: Polynomial) -> Polynomial:
+        pol: list[list] = []
+        for termA in self.terms:
+            for termB in other.terms:
+                alphaExp: int = GaloisField.valToExp(GaloisField.mul(GaloisField.expToVal(termA[0]), GaloisField.expToVal(termB[0])))
+                xExp: int = GaloisField.valToExp(GaloisField.mul(GaloisField.expToVal(termA[1]), GaloisField.expToVal(termB[1])))
+                termC: list = [alphaExp, xExp]
+                pol.append(termC)
+        result: Polynomial = Polynomial(pol)
+        result.combineLikeTerms()
+        return result
 
-    def __truediv__(self, divisor: Polynomial) -> Polynomial:
-        '''Returns the result of the Polynomial Long Division of self with other.'''
-        if not(isinstance(divisor, Polynomial)):
-            return NotImplemented
-        resPol: Polynomial = Polynomial()
-        
-        return resPol
-    
+    def combineLikeTerms(self) -> None:
+        '''Combines like terms within the polynomial.'''
+        newTerms: dict[int, int] = {}
+        for term in self.terms:
+            newTerms[term[1]] = newTerms.get(term[1], 0) ^ GaloisField.expToVal(term[0])
+        self.terms = [[GaloisField.valToExp(v), k] for k, v in newTerms.items()]
+                    
     @staticmethod
-    def _getStrExp(exp: int) -> str:
-        '''
-        Helper method that, given an integer, returns its string value using the exponent characters
-        defined in Polynomial.EXPONENT_CHARS
-
-        Polynomial._getStrExp(2936246) -> '²⁹³⁶²⁴⁶'
-        '''
-        strExp: str = ''
-        for num in str(exp):
-            strExp += Polynomial.EXPONENT_CHARS[num]
-        return strExp  
-
+    def getGenerator(n: int) -> Polynomial:
+        '''Returns the generator polynomial for n EC Codewords.'''
+        if n == 1:
+            return Polynomial([[0, 1], [0, 0]])
+        else:
+            return Polynomial.getGenerator(n-1) * Polynomial([[0, 1], [n-1, 0]])
+ 
 class GaloisField:
     '''Static class used for arithmetic operations inside GF(256)'''
     GALOIS_VALS: list[int] = [1]
@@ -91,18 +87,18 @@ class GaloisField:
     @staticmethod
     def mul(x: int, y: int) -> int:
         '''Returns the product of x and y, done inside GF(256).'''
-        xExp: int = GaloisField.GALOIS_VALS.index(x)
-        yExp: int = GaloisField.GALOIS_VALS.index(y)
+        xExp: int = GaloisField.valToExp(x)
+        yExp: int = GaloisField.valToExp(y)
         newExp: int = xExp+yExp
         if (newExp >= 256): newExp %= 255
-        return GaloisField.GALOIS_VALS[newExp]
+        return GaloisField.expToVal(newExp)
     
     @staticmethod
-    def alphaToVal(n: int) -> int:
+    def expToVal(n: int) -> int:
         '''Returns the value of α^n inside GF(256).'''
         return GaloisField.GALOIS_VALS[n]
     
     @staticmethod
-    def valToAlpha(val: int) -> int:
+    def valToExp(val: int) -> int:
         '''Returns the integer n for which α^n = val inside GF(256).'''
         return GaloisField.GALOIS_VALS.index(val)
