@@ -229,6 +229,17 @@ _EC_TABLE = [
 def getECInfo(version: int, ecLevel: int) -> ECInfo:
     return ECInfo(*_EC_TABLE[version - 1][ecLevel - 1])
 
+def getRemainderBits(version: int) -> str:
+    '''Returns the remainder bits for the given qr code version.'''
+    if version == 1 or 7 <= version <= 13 or 35 <= version <= 40:
+        return ''
+    elif 14 <= version <= 20 or 28 <= version <= 34:
+        return '000'
+    elif 21 <= version <= 27:
+        return '0000'
+    else:
+        return '0000000'
+
 if __name__ == '__main__':
     print(getCapacity(1, 1, '1000'))  # → 10
     print(getCapacity(40, 4, '0001')) # → 3057

@@ -4,7 +4,7 @@ Any and all classes for qr code creation were coded by myself, only few snippets
 the internet, which were then adapted for this code specifically.
 
 This was made as a proof of skill and knowledge in both simple app making (with GUI), tinkering
-with data (creating the QR CODE itself), and general Python knowledge.
+with data (creating the QR CODE itself), and general Python and programming knowledge/methodology.
 
 Lots of credits go to the guide found on this website, which explains the process very clearly: 
 https://www.thonky.com/qr-code-tutorial/, licensed under CC BY-NC 4.0.
@@ -12,6 +12,7 @@ https://www.thonky.com/qr-code-tutorial/, licensed under CC BY-NC 4.0.
 Began on March 10th 2026.
 Slowed down progress from April 6th 2026 to April 27th 2026.
 Paused from ~June 3rd 2026 to September 16th 2026 for High School final exams, and summer break.
+(27days + 37days + TBA ~= 2months 3days)
 """
 import os
 import sys
@@ -158,7 +159,7 @@ class Application(QApplication):
                 self.program.window.enableQRCodeLayout()
             self.stopCheckingQueue()
         elif (time() - self.qrProcessStart > PROCESS_TIMEOUT_TIME):
-            print('Process timed out!')
+            print('\nProcess timed out!')
             self.restartQRProcess()
     
     def stopCheckingQueue(self) -> None:

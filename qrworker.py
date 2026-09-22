@@ -7,9 +7,9 @@ from time import perf_counter
 from typing import Self, Any
 from multiprocessing import Queue
 from IPC_coms import QRMessage, QRTask, QRResult
-from qrdata import ALPHANUM_CHARS, getCapacity, getCCILength, getAlignPosList, ECInfo, getECInfo
+from qrdata import ALPHANUM_CHARS, getCapacity, getCCILength, getAlignPosList, ECInfo, getECInfo, getRemainderBits
 from qrerrors import QRError
-from reed_solomon import Polynomial, GaloisField
+from reed_solomon import ReedSolomon
 
 class QRWorker:
     '''Class whose instance is ran in another process to generate the QR Code's qrCodeData.'''
@@ -45,16 +45,16 @@ class QRWorker:
     def generateQRCode(text: str, ecLevel: int) -> QRResult:
         '''
         Generates the qrCodeData that will be painted onto the QR Widget. 
-        This function and all the following must execute in a separate process to prevent the GUI from freezing.
+        This function and all the following must execute in a separate process to prevent the application GUI from freezing during execution.
         '''
         print('===============')
         print('Text :', text, '\nError Correction Level :', ecLevel)
 
-        qrCodeData: list[list[str]] = []
+        qrCodeData: list[str] = []
         rawData: str = ''
         # rawData contains only the encoded information + error correcting codewords.
         # qrCodeData is the serialized version of rawData, containing alignment paterns, timing paterns, etc,
-        # in a matrice of strings.   
+        # in a list of strings.   
 
         #### Figure out the appropriate encoding mode ####
 
@@ -116,20 +116,27 @@ class QRWorker:
 
         #### Error Correction Codewords creation ####
 
-        print(ecInfo)
-        terms: list[list] = []
-        for i in range(0, ecInfo.totalDataCodewords):
-            codeword: str = rawData[i*8:i*8+8]
-            print(f'(codeword #{i+1}) {codeword} ({int(codeword, 2)})')
-            terms.append([GaloisField.valToExp(int(codeword, 2)), ecInfo.totalDataCodewords-i-1])
-        messagePol: Polynomial = Polynomial(terms)
-        generatorPol: Polynomial = Polynomial.getGenerator(ecInfo.ecCodewordsPerBlock)
-        print("Message polynomial :", messagePol)
-        print("Generator polynomial :", generatorPol)
+        ecBlocks: list[list[int]] = []
+        dataBlocks: list[str] = []
+        ecBlocks, dataBlocks = ReedSolomon.getECCodewords(rawData, ecInfo)
 
+        #### Interleaving process ####
+
+        cutDataBlocks: list[list[str]] = [QRWorker.cutBitString(block) for block in dataBlocks]
+        cutECBlocks: list[list[str]] = [[bin(codeword)[2:] for codeword in block] for block in ecBlocks]
+        QRWorker.addZeros(cutECBlocks)
+        print(sum([len(block) for block in cutDataBlocks]))
+        print(sum([len(block) for block in cutECBlocks]))
+        rawData: str = QRWorker.interleaveCodewords(cutDataBlocks) + QRWorker.interleaveCodewords(cutECBlocks)
+        print(len(rawData))
+
+        #### Add remainder bits if necessary ####
+        
+        rawData += getRemainderBits(version)
+        
         #### End ####
 
-        print('Final rawData :', rawData)
+        #print('Final rawData :', rawData)
 
         #sleep(100) #fake math
         return QRResult(wasSuccessful=True, data=qrCodeData)
@@ -211,6 +218,39 @@ class QRWorker:
             addedBytes += PAD_BYTES[i%2] + '/'
         print('Added bytes :', addedBytes[:-1])
         return padBytes
+
+    @staticmethod
+    def cutBitString(bitString: str) -> list[str]:
+        '''Cuts the given bit string and returns it as a list of 8-bit bytes.'''
+        byteList: list[str] = []
+        for i in range(len(bitString)//8):
+            byteStart: int = i*8
+            byteEnd: int = i*8+8
+            byteList.append(bitString[byteStart:byteEnd])
+        return byteList
+
+    @staticmethod
+    def addZeros(blockList: list[list[str]]) -> None:
+        '''Adds zeros to each binary codeword to turn them all into 8-bit bytes.'''
+        for block in blockList:
+            print(f"Before : {block}")
+            for i in range(len(block)):
+                block[i] = '0'*(8-len(block[i])) + block[i]
+            print(f"After : {block}")
+
+    @staticmethod
+    def interleaveCodewords(blockList: list[list]) -> str:
+        '''Interleaves the codewords into a string.'''
+        interleavedCodewords: str = ''
+        while any(blockList):
+            for block in blockList:
+                try: 
+                    interleavedCodewords += block.pop(0)
+                except IndexError: 
+                    continue
+                except Exception as e:
+                    raise e
+        return interleavedCodewords
     
     @staticmethod
     def resetClass() -> None:

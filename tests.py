@@ -1,19 +1,21 @@
 import application
-import qrworker
 import qrdata  
 import qrerrors
-import reed_solomon
+from qrworker import Interleaver
+from reed_solomon import Polynomial, ReedSolomon, GaloisField
+from qrdata import getECInfo, ECInfo
 import IPC_coms
 from time import time
 
-testPolynomial: bool = False
+testPolynomialMultiplication: bool = False
+testPolynomialAlphaConvertion: bool = False
 testGeneratorPolynomials: bool = False
-Polynomial = reed_solomon.Polynomial
+testPolynomialSort: bool = False
 testGaloisExpToVal: bool = False
 testGaloisValToExp: bool = False
 testGaloisMul: bool = False
-GaloisField = reed_solomon.GaloisField
-if (testPolynomial):
+testDataBlockExtraction: bool = True
+if (testPolynomialMultiplication):
     pol1 = Polynomial([[0, 1], [0, 0]])
     pol2 = Polynomial([[0, 1], [1, 0]])
     print(pol1)
@@ -25,11 +27,32 @@ if (testPolynomial):
     pol5: Polynomial = pol3 * pol4
     print(pol5)
 if (testGeneratorPolynomials):
-    print(Polynomial.getGenerator(3))
-    print(Polynomial.getGenerator(7))
-    print(Polynomial.getGenerator(34))
-    print(Polynomial.getGenerator(125))
-    print(Polynomial.getGenerator(10))
+    print(ReedSolomon.getGeneratorPolynomial(3))
+    print(ReedSolomon.getGeneratorPolynomial(7))
+    print(ReedSolomon.getGeneratorPolynomial(8))
+    print(ReedSolomon.getGeneratorPolynomial(9))
+    print(ReedSolomon.getGeneratorPolynomial(10))
+    print(ReedSolomon.getGeneratorPolynomial(34))
+    print(ReedSolomon.getGeneratorPolynomial(125))
+    print(ReedSolomon.getGeneratorPolynomial(10))
+if (testPolynomialAlphaConvertion):
+    pol1: Polynomial = Polynomial([[6,7], [8,1], [4,3], [2,4]])
+    print(pol1)
+    pol1.convertExpToVal()
+    print(pol1)
+    pol1.convertValToExp()
+    print(pol1)
+    pol2: Polynomial = Polynomial([[4,6], [2,7]], alphaNotation=False)
+    print(pol2)
+    pol3: Polynomial = pol1 * pol2
+    print(pol1)
+    print(pol2)
+    print(pol3)
+if (testPolynomialSort):
+    pol: Polynomial = Polynomial([[1,6], [24,5], [4,12], [3,2], [9,4]])
+    print("Before sort :", pol)
+    pol.sort()
+    print("After sort :", pol)
 if (testGaloisExpToVal):
     assert GaloisField.expToVal(0) == 1
     assert GaloisField.expToVal(1) == 2
@@ -60,3 +83,22 @@ if (testGaloisMul):
     assert GaloisField.mul(GaloisField.expToVal(170), GaloisField.expToVal(164)) == GaloisField.expToVal(79)
     assert GaloisField.mul(GaloisField.expToVal(255), GaloisField.expToVal(255)) == GaloisField.expToVal(255)
     assert GaloisField.mul(GaloisField.expToVal(0), GaloisField.expToVal(0)) == GaloisField.expToVal(0)
+if (testDataBlockExtraction):
+    dataCodewords: list[int] = [67,85,70,134,87,38,85,194,119,50,6,18,6,103,38,
+                                246,246,66,7,118,134,242,7,38,86,22,198,199,146,6,
+                                182,230,247,119,50,7,118,134,87,38,82,6,134,151,50,7,
+                                70,247,118,86,194,6,151,50,224,236,17,236,17,236,17,236]
+    ecInfo: ECInfo = getECInfo(5, 3)
+    string = ''
+    for codeword in dataCodewords:
+        binary = bin(codeword)[2:]
+        binary = '0'*(8-len(binary)) + binary
+        string += binary
+    for i in range(len(string)//8):
+        print(f"(codeword #{i+1}) {string[i*8:i*8+8]}")
+    dataBlocks: list[str] = ReedSolomon._extractDataBlocks(string, ecInfo)
+    print(ecInfo)
+    print(string)
+    print(dataBlocks)
+    ecCodewords: list[list[int]] = [ReedSolomon._getECCodewordsFromBlock(block, ecInfo) for block in dataBlocks]
+    print(ecCodewords)
