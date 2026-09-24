@@ -240,6 +240,10 @@ def getRemainderBits(version: int) -> str:
     else:
         return '0000000'
 
+def getQRCodeDimensions(version: int) -> int:
+    '''Returns the dimensions of the QR Code for the given version.'''
+    return (version-1)*4 + 21
+
 if __name__ == '__main__':
     print(getCapacity(1, 1, '1000'))  # → 10
     print(getCapacity(40, 4, '0001')) # → 3057
@@ -251,3 +255,6 @@ if __name__ == '__main__':
     print(getECInfo(1, 1).g1CodewordsEach) # → 19
     print(getECInfo(40, 4).g2CodewordsEach) # → 16
     print(getECInfo(18, 3).ecCodewordsPerBlock) # → 28
+    print(getQRCodeDimensions(1)) # → 21
+    print(getQRCodeDimensions(2)) # → 25
+    print(getQRCodeDimensions(40)) # → 177

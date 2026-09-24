@@ -18,7 +18,6 @@ import os
 import sys
 import ctypes
 from math import log
-from itertools import combinations
 from typing import Any, override
 from time import sleep, time
 from qrworker import QRWorker
@@ -45,6 +44,8 @@ from PyQt6.QtGui import (
     QAction,
     QPixmap,
     QCursor,
+    QShortcut,
+    QKeySequence,
 )
 from PyQt6.QtCore import (
     Qt, 
@@ -95,6 +96,7 @@ class Application(QApplication):
     def createQRProcess(self) -> None:
         '''Creates and starts the QRProcess.'''
         self.program.window.qrCodeText.setText('Please wait...')
+        self.program.window.appTitle.setText('Please wait...')
         self.qrWorker: QRWorker = QRWorker(self.taskQueue, self.resultQueue)
         self.qrProcess: Process = Process(target=self.qrWorker.idle, daemon=True)
         self.qrProcess.start()
@@ -109,6 +111,11 @@ class Application(QApplication):
     def restartQRProcess(self) -> None:
         '''Restarts the QRProcess.'''
         self.terminateQRProcess()
+        for queue in (self.taskQueue, self.resultQueue):
+            queue.cancel_join_thread()
+            queue.close()
+        self.taskQueue = Queue()
+        self.resultQueue = Queue()
         self.createQRProcess()
     
     def startGeneration(self) -> None:
@@ -141,6 +148,8 @@ class Application(QApplication):
                     window: Window = self.program.window
                     window.enableQRCodeLayout()
                     window.qrCodeText.setText('Waiting for input...')
+                    self.program.window.appTitle.setText('QR Code Generator - Waiting')
+                    self.program.window.setWindowTitle('QR Code Generator - Waiting')
                     print('Successfully started QRWorker!')
             elif (isinstance(response, QRResult)):
                 if (response.wasSuccessful):
@@ -292,7 +301,7 @@ class Window(QWidget):
 
         self.appIcon: QLabel = QLabel()
 
-        self.appTitle: QLabel = QLabel("QR Code Generator - Waiting")
+        self.appTitle: QLabel = QLabel("Please wait...")
 
         self.TBMinButton: QPushButton = QPushButton()
         self.TBMinButton.clicked.connect(self.showMinimized)
@@ -304,6 +313,10 @@ class Window(QWidget):
         self.TBCloseButton.clicked.connect(self.close)
 
         self.outerLimiter: QWidget = QWidget()
+
+        self.restartWorkerShortcut: QShortcut = QShortcut(QKeySequence('Ctrl+R'), self)
+        self.restartWorkerShortcut.activated.connect(self.disableQRCodeLayout)
+        self.restartWorkerShortcut.activated.connect(self.program.app.restartQRProcess)
 
     def _createWorkingAreaWidgets(self) -> None:
         '''Creates the widgets that will make up the middle of the window, excluding the top bar, AKA the "Working Area".'''
@@ -417,9 +430,11 @@ class Window(QWidget):
         '''Applies all of the style to all the widgets/layouts'''
         iconPath: str = os.path.join(RESOURCES_DIR, r"runtime-icon.png")
         self.setWindowIcon(self.loadIcon(iconPath))
-        self.setWindowTitle('QR Code Generator - Waiting')
+        self.setWindowTitle('Please wait...')
 
         titleBarHeight: int = self.titleBar.height()
+        iconPath:str = os.path.join(RESOURCES_DIR, "reload.svg")
+        self.reloadIcon: QIcon = QIcon(iconPath)
 
         self.outerLayout.setContentsMargins(0, 0, 0, 0)
         self.outerLayout.setSpacing(0)
@@ -579,6 +594,7 @@ class TitleBar(QWidget):
             self.setMouseTracking(True)
             self.oldClickPos = QCursor.pos()
             self.windowStartPos = self.window().normalPos
+            self.reloadIcon: QIcon = None
     
     @override
     def mouseReleaseEvent(self, event) -> None:
@@ -637,10 +653,16 @@ class TitleBar(QWidget):
             normAction.setEnabled(False)
         minAction: QAction = QAction(window.minimizeIcon, "Minimize", parent=self)
         minAction.triggered.connect(window.showMinimized)
+        restartWorkerAction: QAction = QAction(window.reloadIcon, "Reload worker process", parent=self)
+        restartWorkerAction.setShortcut('Ctrl+r')
+        restartWorkerAction.triggered.connect(window.disableQRCodeLayout)
+        restartWorkerAction.triggered.connect(window.program.app.restartQRProcess)
         closeAction: QAction = QAction(window.closeIcon, "Close", parent=self)
         closeAction.setShortcut('Alt+F4')
         closeAction.triggered.connect(window.close)
         menu.addActions((normAction, minAction, maxAction))
+        menu.addSeparator()
+        menu.addAction(restartWorkerAction)
         menu.addSeparator()
         menu.addAction(closeAction)
         menu.exec(event.globalPos())

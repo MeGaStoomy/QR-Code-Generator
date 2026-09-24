@@ -1,0 +1,8 @@
+<!-- sample rectangle -->
+<svg width="200" height="200" xmlns="http://www.w3.org/2000/svg">
+
+  <path fill="transparent" stroke="#d6a2ec" stroke-width="10" stroke-linecap="round" 
+  d=" M 160 100 A 60 60 0 1 1 142 58" />
+  <line x1="142" y1="58" x2="112" y2="58" stroke-width="10" stroke="#d6a2ec" stroke-linecap="round"/>
+  <line x1="142" y1="58" x2="142" y2="28" stroke-width="10" stroke="#d6a2ec" stroke-linecap="round"/>
+</svg>
