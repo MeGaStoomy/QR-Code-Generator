@@ -81,14 +81,6 @@ QRWidget {
     border: 10px solid #3f2f4f;  
 }
 
-QRWidget[state="empty"] {
-    background-color: gray; 
-}
-
-QRWidget[state="filled"] {
-    background-color: white; 
-}
-
 #QRCodeText {
     qproperty-alignment: AlignCenter;
     font: italic thin bahnschrift;

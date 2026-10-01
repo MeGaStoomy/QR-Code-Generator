@@ -10,6 +10,7 @@ from qrerrors import QRError
 from reed_solomon import ReedSolomon
 from modules import Module
 from encoder import Mode, Encoder
+from masker import Masker
 from qrdata import (
     getCapacity, 
     getCCILength, 
@@ -172,10 +173,23 @@ class QRWorker:
 
         data: list[str] = [bit for bit in rawData]
         Module.placeData(data, qrCodeData)
+
+        #### Find the best mask and apply it ####
+
+        qrCodeData, maskUsed = Masker.applyBestMask(qrCodeData)
+        exportQRCodeAsTextFile(qrCodeData, name='qr_code_test')
+
+        #### Add the 15-bit format string (and 18-bit version string if needed) ####
+
+        Module.placeFormatInformation(qrCodeData, ecLevel, maskUsed)
+        if version >= 7:
+            Module.placeVersionInformation(qrCodeData, version)
+
+        #### Remove Module.ReservedModule instances.
+
+        Module.removeReservedModules(qrCodeData)
         
         #### End ####
-
-        #print('Final rawData :', rawData)
 
         #sleep(100) #fake math
         exportQRCodeAsTextFile(qrCodeData)
@@ -291,7 +305,7 @@ class QRWorker:
                 except Exception as e:
                     raise e
         return interleavedCodewords
-    
+
     @staticmethod
     def resetClass() -> None:
         '''Resets the class attributes to their default values.'''
@@ -299,6 +313,28 @@ class QRWorker:
         __class__._initialized = False
 
 
+
+def exportQRCodeAsTextFileOld(qrCodeData: list[list], name: str = 'qr_code') -> None:
+    '''Temporary test function that takes in the qr code matrix and writes its contents to a text file in the local directory to visualize it.'''
+    import sys, os
+    if getattr(sys, 'frozen', False):
+        # running as a compiled binary
+        SCRIPT_DIR: str = os.path.dirname(sys.executable)
+    else:
+        # running as normal python
+        SCRIPT_DIR: str = os.path.dirname(os.path.abspath(__file__))
+    with open(SCRIPT_DIR + f'\\{name}.txt', 'w') as file:
+        for row in qrCodeData:
+            fileLine: str = ''
+            for module in row:
+                if module == None:
+                    fileLine += 'N '
+                elif isinstance(module, Module.ReservedModule):
+                    #print('Module still left!')
+                    fileLine += module.value + ' '
+                else:
+                    fileLine += module + ' '
+            file.write(fileLine + '\n')
 
 def exportQRCodeAsTextFile(qrCodeData: list[list], name: str = 'qr_code') -> None:
     '''Temporary test function that takes in the qr code matrix and writes its contents to a text file in the local directory to visualize it.'''
@@ -309,7 +345,7 @@ def exportQRCodeAsTextFile(qrCodeData: list[list], name: str = 'qr_code') -> Non
     else:
         # running as normal python
         SCRIPT_DIR: str = os.path.dirname(os.path.abspath(__file__))
-    with open(SCRIPT_DIR + f'\\{name}.txt', 'w') as file:
+    with open(SCRIPT_DIR + f'\\{name}.txt', 'w', encoding='UTF-8') as file:
         for row in qrCodeData:
             fileLine: str = ''
             for module in row:

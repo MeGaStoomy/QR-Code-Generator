@@ -17,12 +17,12 @@ Paused from ~June 3rd 2026 to September 16th 2026 for High School final exams, a
 import os
 import sys
 import ctypes
-from math import log
 from typing import Any, override
 from time import sleep, time
 from qrworker import QRWorker
 from qrerrors import QRError
 from IPC_coms import QRMessage, QRTask, QRResult
+from PyQt6.QtSvgWidgets import QSvgWidget
 from PyQt6.QtWidgets import (
     QApplication,
     QLabel,
@@ -39,6 +39,9 @@ from PyQt6.QtGui import (
     QPalette,
     QColor,
     QPainter,
+    QPen,
+    QBrush,
+    QPainterPath,
     QImage,
     QIcon,
     QAction,
@@ -46,6 +49,8 @@ from PyQt6.QtGui import (
     QCursor,
     QShortcut,
     QKeySequence,
+    QPaintEvent,
+    QClipboard,
 )
 from PyQt6.QtCore import (
     Qt, 
@@ -53,6 +58,7 @@ from PyQt6.QtCore import (
     QPoint,
     QPointF,
     QRect,
+    QRectF,
     QTimer,
 )
 from multiprocessing import (
@@ -69,7 +75,6 @@ else:
     SCRIPT_DIR: str = os.path.dirname(os.path.abspath(__file__))
 RESOURCES_DIR: str = os.path.join(SCRIPT_DIR, 'resources')
 ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("stoomy.qrcodegen")
-
 
 class Program:
     '''Wrapper class for the window and application instances.'''
@@ -92,11 +97,12 @@ class Application(QApplication):
         self.checkTimer: QTimer = QTimer(self)
         self.checkTimer.timeout.connect(self.checkQueue)
         self.qrProcessStart: None | float = None
+        self.qrProcessTimedOut: bool = False
+        self.qrCodeTextResetTimer: QTimer = QTimer(self)
+        self.appClipboard: QClipboard = self.clipboard()
     
     def createQRProcess(self) -> None:
         '''Creates and starts the QRProcess.'''
-        self.program.window.qrCodeText.setText('Please wait...')
-        self.program.window.appTitle.setText('Please wait...')
         self.qrWorker: QRWorker = QRWorker(self.taskQueue, self.resultQueue)
         self.qrProcess: Process = Process(target=self.qrWorker.idle, daemon=True)
         self.qrProcess.start()
@@ -122,15 +128,20 @@ class Application(QApplication):
         '''Tells the QRProcess to start generating the QR Code's qrCodeData'''
         window: Window = self.program.window
         window.disableQRCodeLayout()
+        window.qrCode.qrCodeData = None
         text: str = window.textEntry.toPlainText()
         if (text == ''):
             print('Text cannot be empty!')
+            window.qrCodeText.setText('Text cannot be empty!')
+            self.qrCodeTextResetTimer.start(2000)
             window.enableQRCodeLayout()
             return
         ecLevel: int = window.ecButtonGroup.checkedId()
         self.taskQueue.put(QRTask(QRWorker.generateQRCode, args=(text, ecLevel)))
-        window.qrCodeText.setText('Loading...')
-        # this line is temporary, will change for the loading icon later.
+        window.qrCodeText.hide()
+        window.qrCode.setStyleSheet('background-color: gray;')
+        window.qrCodeLoadingIconWrapper.show()
+        window.qrCodeLoadingIcon.startRotation(36, 0.05)
         self.startCheckingQueue()
         
     def startCheckingQueue(self) -> None:
@@ -141,34 +152,53 @@ class Application(QApplication):
     def checkQueue(self) -> None:
         '''Checks the resultQueue once to see whether the QRWorker has sent back something or not.'''
         PROCESS_TIMEOUT_TIME: int = 10
+        window: Window = self.program.window
         if not(self.resultQueue.empty()):
             response: QRMessage | QRResult = self.resultQueue.get()
             if (isinstance(response, QRMessage)):
                 if (response == QRMessage.ProcessStarted):
-                    window: Window = self.program.window
                     window.enableQRCodeLayout()
-                    window.qrCodeText.setText('Waiting for input...')
-                    self.program.window.appTitle.setText('QR Code Generator - Waiting')
-                    self.program.window.setWindowTitle('QR Code Generator - Waiting')
+                    window.appTitle.setText('QR Code Generator - Waiting')
+                    window.setWindowTitle('QR Code Generator - Waiting')
                     print('Successfully started QRWorker!')
+                    if self.qrProcessTimedOut:
+                        self.qrProcessTimedOut = False
+                        window.qrCodeText.setText('An unknown error occurred.\nPlease try again.')
+                        self.qrCodeTextResetTimer.start(4000)
+                    else:
+                        window.setQRCodeTextToDefault()
+                    if window.qrCode.qrCodeData is None:
+                        window.qrCodeText.show()
             elif (isinstance(response, QRResult)):
                 if (response.wasSuccessful):
                     print('No errors occured during generation.')
+                    window.qrCode.paintQRCode(response.data)
                 else:
                     # An error occured.
                     error: QRError = response.error
                     if (error is QRError.ModeError):
                         failedChar: str = response.data
                         print(failedChar + ' cannot be encoded using any of the four available modes!')
+                        window.qrCodeText.setText(f'Invalid character :\n"{failedChar}" cannot be encoded.')
                     elif (error is QRError.VersionError):
                         print('Too much data to encode!')
-                        # alert the user about this here
+                        window.qrCodeText.setText('Too much data!')
                     elif (error is QRError.EncodeError):
                         print('An error occured trying to encode the text!')
+                        window.qrCodeText.setText('An error occured trying \nto encode the text.')
+                    window.qrCodeText.show()
+                    self.qrCodeTextResetTimer.start(4000)
                 self.program.window.enableQRCodeLayout()
             self.stopCheckingQueue()
+            window.qrCodeLoadingIcon.stopRotation()
+            window.qrCodeLoadingIcon.resetOrientation()
+            window.qrCodeLoadingIconWrapper.hide()
         elif (time() - self.qrProcessStart > PROCESS_TIMEOUT_TIME):
             print('\nProcess timed out!')
+            self.qrProcessTimedOut = True
+            window.qrCodeText.setText('Please wait...')
+            window.qrCodeText.show()
+            window.qrCodeLoadingIconWrapper.hide()
             self.restartQRProcess()
     
     def stopCheckingQueue(self) -> None:
@@ -176,11 +206,22 @@ class Application(QApplication):
         self.checkTimer.stop()
         self.qrProcessStart = None
 
+    def restartShortcutTriggered(self) -> None:
+        '''Method that's executed when the user manually restarts the worker process.'''
+        window: Window = self.program.window
+        window.disableQRCodeLayout()
+        if window.qrCode.qrCodeData is None:
+            window.qrCodeText.setText('Please wait...')
+            window.qrCodeText.show()
+            window.qrCodeLoadingIconWrapper.hide()
+        self.restartQRProcess()
+
 class Window(QWidget):
     def __init__(self, program: Program):
         '''Initializes the UI for the application.'''
         super().__init__()
         self.program: Program = program
+        self.defaultQRCodeText: str = 'Waiting for input...'
         self._setupWindowGeometry()
         self._createTitleBarWidgets()
         self._createWorkingAreaWidgets()
@@ -202,18 +243,17 @@ class Window(QWidget):
             return (self.isMaximized())
     
     def disableQRCodeLayout(self) -> None:
-        '''Disables the QR Code area's widgets.'''
+        '''Disables the QR Code buttons.'''
         self.generateButton.setEnabled(False)
         self.downloadButton.setEnabled(False)
         self.copyButton.setEnabled(False)
-        # add loading icon on qrcode here
     
     def enableQRCodeLayout(self) -> None:
-        '''Enables the QR Code area's widgets.'''
+        '''Enables the QR Code generate button, and download & copy if there is a QR Code being displayed.'''
         self.generateButton.setEnabled(True)
-        self.downloadButton.setEnabled(True)
-        self.copyButton.setEnabled(True)
-        # remove loading icon on qrcode here
+        if self.qrCode.qrCodeData:
+            self.downloadButton.setEnabled(True)
+            self.copyButton.setEnabled(True)
     
     def maximize(self, *args: Any) -> None:
         '''Triggered when TBMaxButton is pressed, or when the title bar is double clicked'''
@@ -301,7 +341,7 @@ class Window(QWidget):
 
         self.appIcon: QLabel = QLabel()
 
-        self.appTitle: QLabel = QLabel("Please wait...")
+        self.appTitle: QLabel = QLabel('QR Code Generator - Please wait...')
 
         self.TBMinButton: QPushButton = QPushButton()
         self.TBMinButton.clicked.connect(self.showMinimized)
@@ -315,8 +355,9 @@ class Window(QWidget):
         self.outerLimiter: QWidget = QWidget()
 
         self.restartWorkerShortcut: QShortcut = QShortcut(QKeySequence('Ctrl+R'), self)
-        self.restartWorkerShortcut.activated.connect(self.disableQRCodeLayout)
-        self.restartWorkerShortcut.activated.connect(self.program.app.restartQRProcess)
+        self.restartWorkerShortcut.activated.connect(self.program.app.restartShortcutTriggered)
+
+        self.program.app.applicationStateChanged
 
     def _createWorkingAreaWidgets(self) -> None:
         '''Creates the widgets that will make up the middle of the window, excluding the top bar, AKA the "Working Area".'''
@@ -356,7 +397,9 @@ class Window(QWidget):
 
         self.qrCodeText: QLabel = QLabel()
 
-        self.qrCodeLoadingIcon: QLabel = QLabel()
+        self.qrCodeLoadingIconWrapper: QWidget = QWidget()
+        self.qrCodeLoadingIconWrapper.setLayout(QVBoxLayout())
+        self.qrCodeLoadingIcon: QRCodeLoadingIcon = QRCodeLoadingIcon()
 
         self.generateButton: QPushButton = QPushButton("Generate")
         self.generateButton.setAutoDefault(False)
@@ -406,9 +449,11 @@ class Window(QWidget):
         for button in self.ecButtonGroup.buttons():
             ecButtonLayout.addWidget(button)
 
+        self.qrCodeLoadingIconWrapper.layout().addWidget(self.qrCodeLoadingIcon)
+
         qrCode: QVBoxLayout = self.qrCode.layout()
         qrCode.addWidget(self.qrCodeText)
-        qrCode.addWidget(self.qrCodeLoadingIcon)
+        qrCode.addWidget(self.qrCodeLoadingIconWrapper)
 
         qrCodeLayout: QVBoxLayout = self.qrCodeLayout.layout()
         qrCodeLayout.addWidget(self.qrCode)
@@ -430,7 +475,7 @@ class Window(QWidget):
         '''Applies all of the style to all the widgets/layouts'''
         iconPath: str = os.path.join(RESOURCES_DIR, r"runtime-icon.png")
         self.setWindowIcon(self.loadIcon(iconPath))
-        self.setWindowTitle('Please wait...')
+        self.setWindowTitle('QR Code Generator - Please wait...')
 
         titleBarHeight: int = self.titleBar.height()
         iconPath:str = os.path.join(RESOURCES_DIR, "reload.svg")
@@ -522,15 +567,22 @@ class Window(QWidget):
 
         length: int = self.height()-200
         self.qrCode.setFixedSize(length, length)
-        self.qrCode.setProperty("state", "empty")
+        self.qrCode.setStyleSheet('background-color: gray;')
 
         self.qrCodeText.setObjectName("QRCodeText")
         self.qrCodeText.setStyleSheet(f"font-size: {length/15}px")
+        self.qrCodeText.setText('Please wait...')
+        self.program.app.qrCodeTextResetTimer.timeout.connect(self.setQRCodeTextToDefault)
 
         iconPath = os.path.join(RESOURCES_DIR, "loading.svg")
         size: int = int(length/3)
-        self.qrCodeLoadingIcon.setPixmap(QPixmap(iconPath).scaled(size,size))
-        self.qrCodeLoadingIcon.hide()
+        self.qrCodeLoadingIconWrapper.setStyleSheet("background-color: transparent;")
+        self.qrCodeLoadingIconWrapper.hide()
+        self.qrCodeLoadingIconWrapper.layout().setContentsMargins(length//2 - size//2 - 20, 0, 0, 0)
+        self.qrCodeLoadingIcon.load(iconPath)
+        self.qrCodeLoadingIcon.setFixedSize(size, size)
+        self.qrCodeLoadingIcon.setAutoFillBackground(True)
+        self.qrCodeLoadingIcon.setStyleSheet('background-color: red;')
 
         self.qrCodeButtonsLayout.setContentsMargins(0, 20, 0, 0)
         self.qrCodeButtonsLayout.setSpacing(0)
@@ -567,16 +619,77 @@ class Window(QWidget):
         Y: float = SCREENH//2-HEIGHT//2
         return QPoint(X, Y), WIDTH, HEIGHT
 
+    def setQRCodeTextToDefault(self) -> None:
+        '''Sets the texts displayed on the QR Code to the default text '''''
+        self.qrCodeText.setText(self.defaultQRCodeText)
+
 class QRWidget(QWidget):
+
+    MODULE_COLOR_MAP: dict[str, Qt.GlobalColor] = {
+        '1': Qt.GlobalColor.black,
+        '0': Qt.GlobalColor.white,
+    }
+
     def __init__(self) -> None:
         '''Initializes the special QWidget that displays the QR Code.'''
         super().__init__()
+        self.qrCodeData: list[list[str]] | None = None
+        self.painterPathBlack: QPainterPath = QPainterPath()
+        self.painterPathRed: QPainterPath = QPainterPath()
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-        self.qrCodeData: None | list = None
 
-    def paintQRCode(self) -> None:
-        '''Paints the QR Code onto the widget, as long as there is qrCodeData to use.'''
-        raise NotImplementedError()
+    def paintQRCode(self, qrCodeData: list[list[str]]) -> None:
+        '''Paints the QR Code onto the widget.'''
+        self.qrCodeData = qrCodeData
+        self.setStyleSheet('background-color: white;')
+        self.painterPathBlack.clear()
+        self.painterPathRed.clear()
+        currentX: float = 0
+        currentY: float = 0
+        for row in range(len(qrCodeData)):
+            for module in qrCodeData[row]:
+                color: Qt.GlobalColor = self.MODULE_COLOR_MAP.get(module, Qt.GlobalColor.red) # red signifies an invalid module
+                if color == Qt.GlobalColor.black:
+                    self.painterPathBlack.addRect(currentX, currentY, 1, 1)
+                elif color == Qt.GlobalColor.red:
+                    self.painterPathRed.addRect(currentX, currentY, 1, 1)
+                currentX += 1
+            currentX = 0
+            currentY += 1
+        self.update()
+
+    @override
+    def paintEvent(self, event: QPaintEvent) -> None:
+        if not self.qrCodeData is None:
+            painter: QPainter = QPainter(self)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(Qt.BrushStyle.SolidPattern)
+            BORDER_WIDTH: int = 10
+            VIEWPORT_SIZE: int = self.width() - BORDER_WIDTH*2
+            painter.setViewport(BORDER_WIDTH, BORDER_WIDTH, VIEWPORT_SIZE, VIEWPORT_SIZE)
+            moduleSize: float = self.width() / (len(self.qrCodeData) + 8)
+            painter.scale(moduleSize, moduleSize)
+            painter.translate(4, 4)
+            painter.setBrush(Qt.GlobalColor.black)
+            painter.drawPath(self.painterPathBlack)
+            if not self.painterPathRed.isEmpty():
+                painter.setBrush(Qt.GlobalColor.red)
+                painter.drawPath(self.painterPathRed)
+                print('Invalid modules present!')
+            else:
+                print('No invalid module.')
+            painter.end()
+            print('Painted QR Code matrix to widget.')
+
+    def copy(self) -> None:
+        '''Copies the QR Code into the user's clipboard as an image, if there is one.'''
+        if not self.qrCodeData is None:
+            pass
+
+    def save(self) -> None:
+        '''Saves the QR Code as an image, if there is one.'''
+        if not self.qrCodeData is None:
+            pass
 
 class TitleBar(QWidget):
     def __init__(self, parent: Window) -> None:
@@ -654,9 +767,8 @@ class TitleBar(QWidget):
         minAction: QAction = QAction(window.minimizeIcon, "Minimize", parent=self)
         minAction.triggered.connect(window.showMinimized)
         restartWorkerAction: QAction = QAction(window.reloadIcon, "Reload worker process", parent=self)
-        restartWorkerAction.setShortcut('Ctrl+r')
-        restartWorkerAction.triggered.connect(window.disableQRCodeLayout)
-        restartWorkerAction.triggered.connect(window.program.app.restartQRProcess)
+        restartWorkerAction.setShortcut('Ctrl+R')
+        restartWorkerAction.triggered.connect(window.program.app.restartShortcutTriggered)
         closeAction: QAction = QAction(window.closeIcon, "Close", parent=self)
         closeAction.setShortcut('Alt+F4')
         closeAction.triggered.connect(window.close)
@@ -666,6 +778,48 @@ class TitleBar(QWidget):
         menu.addSeparator()
         menu.addAction(closeAction)
         menu.exec(event.globalPos())
+
+class QRCodeLoadingIcon(QSvgWidget):
+    def __init__(self, parent: QWidget | None = None) -> None:
+        '''Initializes the custom rotatable svg icon.'''
+        super().__init__(parent)
+        self.angle: float = 0
+        self.angleDelta: float = 0
+        self.timerDelay: int = 0
+        self.rotateTimer: QTimer = QTimer()
+        self.rotateTimer.timeout.connect(self.rotate)
+
+    @override
+    def paintEvent(self, event: QPaintEvent | None = None):
+        '''Called to paint the loading icon to the screen.'''
+        painter: QPainter = QPainter(self)
+        halfWidth: float = self.width()/2
+        halfHeight: float = self.height()/2
+        painter.translate(halfWidth, halfHeight)
+        painter.rotate(self.angle)
+        painter.translate(-halfWidth, -halfHeight)
+        self.renderer().render(painter, QRectF(self.rect()))
+        painter.end()
+
+    def startRotation(self, angle: float, delay: float) -> None:
+        '''Starts rotating the svg icon rotate every interval of delay.'''
+        self.angleDelta = angle
+        self.timerDelay = int(delay*1000)
+        self.rotateTimer.start(self.timerDelay)
+
+    def rotate(self) -> None:
+        '''Rotates the svg by the angle set by QRCodeLoadingIcon.startRotation.'''
+        self.angle += self.angleDelta
+        self.update()
+        self.rotateTimer.start(self.timerDelay)
+
+    def stopRotation(self) -> None:
+        '''Stops rotating the svg.'''
+        self.rotateTimer.stop()
+
+    def resetOrientation(self) -> None:
+        '''Resets the orentiation of the svg.'''
+        self.angle = 0
 
 if __name__ == '__main__':
     freeze_support()

@@ -1,6 +1,8 @@
 from reed_solomon import Polynomial, ReedSolomon, GaloisField
 from qrdata import getECInfo, ECInfo
 from time import time
+from masker import Masker
+from qrworker import exportQRCodeAsTextFile
 
 if __name__ == '__main__':
     testPolynomialMultiplication: bool = False
@@ -11,6 +13,10 @@ if __name__ == '__main__':
     testGaloisValToExp: bool = False
     testGaloisMul: bool = False
     testDataBlockExtraction: bool = False
+    testMaskFunctions: bool = False
+    testMaskLineEval: bool = False
+    testMaskSquareEval: bool = False
+    testMaskPatternEval: bool = True
     if (testPolynomialMultiplication):
         pol1 = Polynomial([[0, 1], [0, 0]])
         pol2 = Polynomial([[0, 1], [1, 0]])
@@ -98,3 +104,49 @@ if __name__ == '__main__':
         print(dataBlocks)
         ecCodewords: list[list[int]] = [ReedSolomon._getECCodewordsFromBlock(block, ecInfo) for block in dataBlocks]
         print(ecCodewords)
+    if (testMaskFunctions):
+        start = time()
+        size: int = 177
+        exportQRCodeAsTextFile([['0' for _ in range(size)] for _ in range(size)], 'qr_code_mask_original')
+        for i in range(8):
+            matrix: list[list] = [['0' for _ in range(size)] for _ in range(size)]
+            Masker.applyMask(i, matrix)
+            exportQRCodeAsTextFile(matrix, f'qr_code_mask_{i}')
+        print(f"Time taken : {time()-start:.6f} seconds.")
+    if (testMaskLineEval):
+        start: float = time()
+        size: int = 21
+        matrix: list[list] = [['0' for _ in range(size)] for _ in range(size)]
+        matrix = Masker.applyMask(1, matrix)
+        print(Masker._evaluateRepeatingLines(matrix))
+        print(f"Time taken : {time()-start:.6f} seconds.")
+        exportQRCodeAsTextFile(matrix, name='qr_code_test_line')
+    if (testMaskSquareEval):
+        matrix: list[list] = [['0', '1', '0', '0', '0', '1'],
+                              ['0', '0', '1', '0', '0', '0'],
+                              ['0', '0', '1', '0', '0', '0'],
+                              ['0', '1', '1', '0', '1', '0'],
+                              ['0', '1', '1', '0', '0', '0'],
+                              ['1', '0', '0', '0', '0', '0']]
+        start: float = time()
+        print(Masker._evaluateSquares(matrix))
+        print(f"Time taken : {time()-start:.6f} seconds.")
+        exportQRCodeAsTextFile(matrix, name='qr_code_test_square')
+    if (testMaskPatternEval):
+        matrix: list[list] = [['0', '0', '0', '0', '1', '0', '1', '1', '1', '0', '1', '0', '0'],
+                              ['0', '0', '0', '0', '1', '0', '1', '1', '1', '0', '1', '0', '0'],
+                              ['0', '0', '1', '0', '1', '1', '1', '0', '1', '0', '1', '0', '0'],
+                              ['0', '0', '0', '0', '1', '0', '1', '1', '1', '0', '1', '0', '0'],
+                              ['0', '0', '0', '0', '1', '0', '1', '1', '1', '0', '1', '0', '0'],
+                              ['0', '0', '0', '0', '1', '0', '1', '1', '1', '0', '1', '0', '0'],
+                              ['0', '0', '0', '0', '1', '0', '1', '1', '1', '0', '1', '0', '0'],
+                              ['0', '0', '1', '0', '1', '1', '1', '0', '1', '0', '0', '0', '0'],
+                              ['0', '0', '0', '0', '1', '0', '1', '1', '1', '0', '1', '0', '0'],
+                              ['0', '0', '0', '0', '1', '0', '1', '1', '1', '0', '1', '0', '0'],
+                              ['0', '0', '0', '0', '1', '0', '1', '1', '1', '0', '1', '0', '0'],
+                              ['0', '0', '0', '0', '1', '0', '1', '1', '1', '0', '1', '0', '0'],
+                              ['0', '0', '1', '0', '1', '1', '1', '0', '1', '0', '0', '0', '0']]
+        start: float = time()
+        print(Masker._evaluateLinePattern(matrix))
+        print(f"Time taken : {time()-start:.6f} seconds.")
+        exportQRCodeAsTextFile(matrix, name='qr_code_test_pattern')

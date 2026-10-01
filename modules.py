@@ -4,7 +4,7 @@ This file contains all the code related to placing modules inside of the QR Code
 
 from enum import Enum
 from itertools import product
-from qrdata import getAlignPosList
+from qrdata import getAlignPosList, getFormatString, getVersionString
 
 class Module:
     '''Static class used for code related to module placement.'''
@@ -158,3 +158,46 @@ class Module:
                 if not isinstance(matrix[y][newX], Module.ReservedModule):
                     matrix[y][newX] = data.pop()
             y += yDelta
+
+    @staticmethod
+    def placeFormatInformation(matrix, ecLevel: int, mask: int) -> None:
+        '''Places the appropriate 15-bit format string into the matrix.'''
+        formatString: str = getFormatString(ecLevel, mask)
+        bitIndex: int = 0
+        for column in range(6):
+            matrix[8][column] = formatString[bitIndex]
+            bitIndex +=1
+        for column in range(7, 9):
+            matrix[8][column] = formatString[bitIndex]
+            bitIndex +=1
+        matrix[7][8] = formatString[bitIndex]
+        bitIndex +=1
+        for row in range(5, -1, -1):
+            matrix[row][8] = formatString[bitIndex]
+            bitIndex +=1
+        bitIndex = 0
+        size: int = len(matrix)
+        for row in range(size-1, size-8, -1):
+            matrix[row][8] = formatString[bitIndex]
+            bitIndex +=1
+        for column in range(size-8, size):
+            matrix[8][column] = formatString[bitIndex]
+            bitIndex +=1
+
+    @staticmethod
+    def placeVersionInformation(matrix, version: int) -> None:
+        '''Places the appropriate 18-bit version string into the matrix.'''
+        pass
+
+    @staticmethod
+    def removeReservedModules(matrix) -> None:
+        '''Replaces all Module.ReservedModule instances with their values.'''
+        size: int = len(matrix)
+        for row in range(size):
+            for column in range(size):
+                try:
+                    matrix[row][column] = matrix[row][column].value
+                except AttributeError:
+                    pass
+                except Exception as e:
+                    raise e

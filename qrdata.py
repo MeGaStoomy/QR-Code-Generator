@@ -10,7 +10,7 @@ https://www.thonky.com/qr-code-tutorial/ (licensed under CC BY-NC 4.0), whom I b
 
 from typing import NamedTuple
 
-ALPHANUM_CHARS = (
+ALPHANUM_CHARS: list[str] = (
                 [str(num) for num in range(10)] + 
                 [chr(char) for char in range(ord('A'), ord('Z')+1)] +
                 [' ', '$', '%', '*', '+', '-', '.', '/', ':']
@@ -117,7 +117,7 @@ def getCCILength(version: int, mode: str) -> int:
 # version: 1–40 (index 0 = version 1)
 # Generated using Claude AI, from https://www.thonky.com/qr-code-tutorial/character-capacities
 
-_ALIGNMENT_PATTERN_LOCATIONS = [
+_ALIGNMENT_PATTERN_LOCATIONS: list[list[int]] = [
     [],             # Version 1 (no alignment patterns)
     [6, 18],        # Version 2
     [6, 22],        # Version 3
@@ -160,7 +160,8 @@ _ALIGNMENT_PATTERN_LOCATIONS = [
     [6, 30, 58, 86, 114, 142, 170],  # Version 40
 ]
 
-def getAlignPosList(version: int):
+def getAlignPosList(version: int) -> list[int]:
+    '''Returns the list of rows/columns the alignment patterns have to be placed.'''
     return _ALIGNMENT_PATTERN_LOCATIONS[version-1]
 
 ############################
@@ -183,7 +184,7 @@ class ECInfo(NamedTuple):
     g2Blocks: int          # 0 if no group 2
     g2CodewordsEach: int  # 0 if no group 2
 
-_EC_TABLE = [
+_EC_TABLE: list[list[tuple]] = [
     [(19,7,1,19,0,0),(16,10,1,16,0,0),(13,13,1,13,0,0),(9,17,1,9,0,0)],                    # v1
     [(34,10,1,34,0,0),(28,16,1,28,0,0),(22,22,1,22,0,0),(16,28,1,16,0,0)],                  # v2
     [(55,15,1,55,0,0),(44,26,1,44,0,0),(34,18,2,17,0,0),(26,22,2,13,0,0)],                  # v3
@@ -227,6 +228,7 @@ _EC_TABLE = [
 ]
 
 def getECInfo(version: int, ecLevel: int) -> ECInfo:
+    '''Returns the information related to error correction.'''
     return ECInfo(*_EC_TABLE[version - 1][ecLevel - 1])
 
 def getRemainderBits(version: int) -> str:
@@ -243,6 +245,57 @@ def getRemainderBits(version: int) -> str:
 def getQRCodeDimensions(version: int) -> int:
     '''Returns the dimensions of the QR Code for the given version.'''
     return (version-1)*4 + 21
+
+############################
+
+############################
+
+# QR code format and version strings
+# Each entry: (totalDataCw, ecCwPerBlock, g1Blocks, g1CwEach, g2Blocks, g2CwEach)
+# Generated using Claude AI, from https://www.thonky.com/qr-code-tutorial/format-version-tables
+
+FORMAT_STRINGS: dict[int, list[str]] = {
+    0: [  # L
+        "111011111000100", "111001011110011", "111110110101010", "111100010011101",
+        "110011000101111", "110001100011000", "110110001000001", "110100101110110",
+    ],
+    1: [  # M
+        "101010000010010", "101000100100101", "101111001111100", "101101101001011",
+        "100010111111001", "100000011001110", "100111110010111", "100101010100000",
+    ],
+    2: [  # Q
+        "011010101011111", "011000001101000", "011111100110001", "011101000000110",
+        "010010010110100", "010000110000011", "010111011011010", "010101111101101",
+    ],
+    3: [  # H
+        "001011010001001", "001001110111110", "001110011100111", "001100111010000",
+        "000011101100010", "000001001010101", "000110100001100", "000100000111011",
+    ],
+}
+
+def getFormatString(ecLevel: int, mask: int) -> str:
+    '''Returns the 15-bit format string for the given error correction level and mask used.'''
+    return FORMAT_STRINGS[ecLevel-1][mask]
+
+# Index 0 = version 7, index 1 = version 8, ... index 33 = version 40
+VERSION_STRINGS: list[str] = [
+    "000111110010010100", "001000010110111100", "001001101010011001",
+    "001010010011010011", "001011101111110110", "001100011101100010",
+    "001101100001000111", "001110011000001101", "001111100100101000",
+    "010000101101111000", "010001010001011101", "010010101000010111",
+    "010011010100110010", "010100100110100110", "010101011010000011",
+    "010110100011001001", "010111011111101100", "011000111011000100",
+    "011001000111100001", "011010111110101011", "011011000010001110",
+    "011100110000011010", "011101001100111111", "011110110101110101",
+    "011111001001010000", "100000100111010101", "100001011011110000",
+    "100010100010111010", "100011011110011111", "100100101100001011",
+    "100101010000101110", "100110101001100100", "100111010101000001",
+    "101000110001101001",
+]
+
+def getVersionString(version: int) -> str:
+    '''Returns the 18-bit version string for the given version.'''
+    return VERSION_STRINGS[version-7]
 
 if __name__ == '__main__':
     print(getCapacity(1, 1, '1000'))  # → 10
