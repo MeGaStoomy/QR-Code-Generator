@@ -34,15 +34,16 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
     QHBoxLayout,
     QSizePolicy,
+    QFileDialog,
 )
 from PyQt6.QtGui import (
     QPalette,
     QColor,
     QPainter,
-    QPen,
-    QBrush,
     QPainterPath,
+    QPaintDevice,
     QImage,
+    QImageWriter,
     QIcon,
     QAction,
     QPixmap,
@@ -407,9 +408,11 @@ class Window(QWidget):
 
         self.downloadButton: QPushButton = QPushButton()
         self.downloadButton.setAutoDefault(False)
+        self.downloadButton.clicked.connect(self.qrCode.download)
 
         self.copyButton: QPushButton = QPushButton()
         self.copyButton.setAutoDefault(False)
+        self.copyButton.clicked.connect(self.qrCode.copy)
 
         self.disableQRCodeLayout()
 
@@ -634,6 +637,7 @@ class QRWidget(QWidget):
         '''Initializes the special QWidget that displays the QR Code.'''
         super().__init__()
         self.qrCodeData: list[list[str]] | None = None
+        self.qrCodeImage: QImage | None = None
         self.painterPathBlack: QPainterPath = QPainterPath()
         self.painterPathRed: QPainterPath = QPainterPath()
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
@@ -657,39 +661,65 @@ class QRWidget(QWidget):
             currentX = 0
             currentY += 1
         self.update()
+        self.cacheQRCodeImage()
 
     @override
     def paintEvent(self, event: QPaintEvent) -> None:
         if not self.qrCodeData is None:
-            painter: QPainter = QPainter(self)
+            self.drawPainterPath(self)
+
+    def copy(self) -> None:
+        '''Copies the QR Code image into the user's clipboard if there is one cached in memory.'''
+        if not self.qrCodeImage is None:
+            print('Copying QR Code to clipboard.')
+            window: Window = self.window()
+            window.program.app.appClipboard.setImage(self.qrCodeImage)
+
+    def download(self) -> None:
+        '''Downloads the QR Code image onto the user's device, if there is one cached in memory.'''
+        if not self.qrCodeImage is None:
+            print('Opening Save As prompt.')
+            path, _ = QFileDialog.getSaveFileName(filter="PNG (*.png);;JPEG (*.jpg *.jpeg);;WEBP (*.webp *.wbmp);;TIF (*.tif *.tiff);;ICO (*.ico *.icns);;All files (*)")
+            print(path)
+            print(_)
+            #print(QImageWriter.supportedImageFormats())
+            successfullySaved: bool = self.qrCodeImage.save(path)
+            if not successfullySaved:
+                print('Error while saving image!')
+
+    def drawPainterPath(self, painterDevice: QPaintDevice):
+        '''Draws self.painterPathBlack/Red onto the given QPaintDevice.'''
+        if not self.qrCodeData is None:
+            painter: QPainter = QPainter(painterDevice)
             painter.setPen(Qt.PenStyle.NoPen)
             painter.setBrush(Qt.BrushStyle.SolidPattern)
-            BORDER_WIDTH: int = 10
-            VIEWPORT_SIZE: int = self.width() - BORDER_WIDTH*2
+            if isinstance(painterDevice, QRWidget):
+                BORDER_WIDTH: int = 10
+            else:
+                BORDER_WIDTH: int = 0
+            VIEWPORT_SIZE: int = painterDevice.width() - BORDER_WIDTH*2
             painter.setViewport(BORDER_WIDTH, BORDER_WIDTH, VIEWPORT_SIZE, VIEWPORT_SIZE)
-            moduleSize: float = self.width() / (len(self.qrCodeData) + 8)
+            moduleSize: float = painterDevice.width() / (len(self.qrCodeData) + 8)
             painter.scale(moduleSize, moduleSize)
             painter.translate(4, 4)
             painter.setBrush(Qt.GlobalColor.black)
             painter.drawPath(self.painterPathBlack)
-            if not self.painterPathRed.isEmpty():
+            if self.painterPathRed.isEmpty():
+                print('No invalid module.')
+            else:
                 painter.setBrush(Qt.GlobalColor.red)
                 painter.drawPath(self.painterPathRed)
                 print('Invalid modules present!')
-            else:
-                print('No invalid module.')
             painter.end()
             print('Painted QR Code matrix to widget.')
 
-    def copy(self) -> None:
-        '''Copies the QR Code into the user's clipboard as an image, if there is one.'''
+    def cacheQRCodeImage(self) -> None:
+        '''Caches the QR Code image in memory for later reuse.'''
         if not self.qrCodeData is None:
-            pass
-
-    def save(self) -> None:
-        '''Saves the QR Code as an image, if there is one.'''
-        if not self.qrCodeData is None:
-            pass
+            SIZE: int = 1480
+            self.qrCodeImage = QImage(SIZE, SIZE, QImage.Format.Format_RGB32)
+            self.qrCodeImage.fill(Qt.GlobalColor.white)
+            self.drawPainterPath(self.qrCodeImage)
 
 class TitleBar(QWidget):
     def __init__(self, parent: Window) -> None:

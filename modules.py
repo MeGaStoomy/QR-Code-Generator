@@ -154,7 +154,7 @@ class Module:
             y: int = 0
             yDelta: int = 1
         while 0 <= y <= len(matrix)-1:
-            for newX in [x, x-1]:
+            for newX in [x-1, x]:
                 if not isinstance(matrix[y][newX], Module.ReservedModule):
                     matrix[y][newX] = data.pop()
             y += yDelta
@@ -187,10 +187,18 @@ class Module:
     @staticmethod
     def placeVersionInformation(matrix, version: int) -> None:
         '''Places the appropriate 18-bit version string into the matrix.'''
-        pass
+        versionString: str = getVersionString(version)
+        size: int = len(matrix)
+        bitIndex: int = 0
+        for row in range(5, -1, -1):
+            for column in range(size-9, size-12, -1):
+                matrix[row][column] = versionString[bitIndex]
+                matrix[column][row] = versionString[bitIndex]
+                bitIndex += 1
+
 
     @staticmethod
-    def removeReservedModules(matrix) -> None:
+    def replaceReservedModules(matrix) -> None:
         '''Replaces all Module.ReservedModule instances with their values.'''
         size: int = len(matrix)
         for row in range(size):

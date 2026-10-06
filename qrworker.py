@@ -177,7 +177,9 @@ class QRWorker:
         #### Find the best mask and apply it ####
 
         qrCodeData, maskUsed = Masker.applyBestMask(qrCodeData)
-        exportQRCodeAsTextFile(qrCodeData, name='qr_code_test')
+
+        #maskUsed: int = 6
+        #qrCodeData = Masker.applyMask(maskUsed, qrCodeData)
 
         #### Add the 15-bit format string (and 18-bit version string if needed) ####
 
@@ -187,12 +189,12 @@ class QRWorker:
 
         #### Remove Module.ReservedModule instances.
 
-        Module.removeReservedModules(qrCodeData)
+        Module.replaceReservedModules(qrCodeData)
         
         #### End ####
 
         #sleep(100) #fake math
-        exportQRCodeAsTextFile(qrCodeData)
+        #exportQRCodeAsTextFile(qrCodeData)
         return QRResult(wasSuccessful=True, data=qrCodeData)
 
     @staticmethod

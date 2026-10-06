@@ -74,7 +74,7 @@ class ReedSolomon:
             term[1] += diff
         #print("\nFixed message polynomial :", messagePol, "\nAKA :", messagePol.__str__(alphaNotation=False))
         #print("Fixed generator polynomial :", generatorPol, "\nAKA :", generatorPol.__str__(alphaNotation=False))
-        ecPolynomial: Polynomial = Polynomial.longDivide(messagePol, generatorPol, len(messagePol.terms))
+        ecPolynomial: Polynomial = Polynomial.longDivide(messagePol, generatorPol, len(block)//8)
         ecCodewords: list[int] = [GaloisField.expToVal(term[0]) for term in ecPolynomial.terms]
         print(ecCodewords)
         return ecCodewords

@@ -96,8 +96,7 @@ class Encoder:
             else:
                 return Encoder.encodeKanji(text)
         except Exception as e:
-            raise e
-            # temporary, will replace for the return later when debugging and coding is done.
+            #raise e
             return QRError.EncodeError
     
     @staticmethod
@@ -111,7 +110,7 @@ class Encoder:
         while (start < len(text)):
             currentGroup: int = int(text[start:start+3])
             groupBin: str = str(bin(currentGroup))[2:]
-            lenGroup: int = len(str(currentGroup))
+            lenGroup: int = len(text[start:start+3])
             if (lenGroup == 3):
                 groupBin = '0'*(10-len(groupBin)) + groupBin
             elif (lenGroup == 2):
@@ -122,7 +121,6 @@ class Encoder:
             result += groupBin
             start += 3
         return result
-
     
     @staticmethod
     def encodeAlphanum(text: str) -> str:

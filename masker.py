@@ -10,14 +10,14 @@ class Masker:
     '''Static class used for applying and evaluating masks'''
 
     MASK_FUNCTIONS: dict[int, Callable[[int, int], bool]] = {
-                0: (lambda row, column: (row+column) % 2 == 0),
-                1: (lambda row, column: row % 2 == 0),
-                2: (lambda row, column: column % 3 == 0),
-                3: (lambda row, column: (row+column) % 3 == 0),
-                4: (lambda row, column: (floor(row/2) + floor(column/3)) % 2 == 0),
-                5: (lambda row, column: ((row*column) % 2) + ((row*column) % 3) == 0),
-                6: (lambda row, column: ((row*column) % 2) + ((row*column) % 3) % 2 == 0),
-                7: (lambda row, column: ((row+column) % 2) + ((row*column) % 3) % 2 == 0),
+                0: (lambda row, column: (((row+column) % 2) == 0)),
+                1: (lambda row, column: ((row % 2) == 0)),
+                2: (lambda row, column: ((column % 3) == 0)),
+                3: (lambda row, column: (((row+column) % 3) == 0)),
+                4: (lambda row, column: (((floor(row/2) + floor(column/3)) % 2) == 0)),
+                5: (lambda row, column: ((((row*column) % 2) + ((row*column) % 3)) == 0)),
+                6: (lambda row, column: (((((row*column) % 2) + ((row*column) % 3)) % 2) == 0)),
+                7: (lambda row, column: (((((row+column) % 2) + ((row*column) % 3)) % 2) == 0)),
             }
     PATTERN_BEFORE: list[str] = ['0', '0', '0', '0', '1', '0', '1', '1', '1', '0', '1']
     PATTERN_AFTER: list[str] = ['1', '0', '1', '1', '1', '0', '1', '0', '0', '0', '0']
