@@ -12,11 +12,15 @@ https://www.thonky.com/qr-code-tutorial/, licensed under CC BY-NC 4.0.
 Began on March 10th 2026.
 Slowed down progress from April 6th 2026 to April 27th 2026.
 Paused from ~June 3rd 2026 to September 16th 2026 for High School final exams, and summer break.
-(27days + 37days + TBA ~= 2months 3days)
+Finished on October 6th 2026.
+(27days + 37days + 20days = 2months 23days)
 """
+
+from __future__ import annotations
 import os
 import sys
 import ctypes
+import io
 from typing import Any, override
 from time import sleep, time
 from qrworker import QRWorker
@@ -66,14 +70,21 @@ from multiprocessing import (
     Process,
     Queue,
     freeze_support,
+    set_executable,
 )
 
+'''
 if getattr(sys, 'frozen', False):
     # running as a compiled binary
     SCRIPT_DIR: str = os.path.dirname(sys.executable)
 else:
     # running as normal python
     SCRIPT_DIR: str = os.path.dirname(os.path.abspath(__file__))
+'''
+for _stream in (sys.stdout, sys.stderr):
+    if isinstance(_stream, io.TextIOWrapper):
+        _stream.reconfigure(encoding='utf-8', errors='replace')
+SCRIPT_DIR: str = os.path.dirname(os.path.abspath(__file__))
 RESOURCES_DIR: str = os.path.join(SCRIPT_DIR, 'resources')
 ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("stoomy.qrcodegen")
 
@@ -853,4 +864,6 @@ class QRCodeLoadingIcon(QSvgWidget):
 
 if __name__ == '__main__':
     freeze_support()
+    if "__compiled__" in globals():
+        set_executable(sys.argv[0])
     Program().execute()

@@ -2,6 +2,7 @@
 This file contains code related to applying masks the QR Code matrix, and evaluating which is the best.
 '''
 
+from __future__ import annotations
 from modules import Module
 from math import floor
 from typing import Callable

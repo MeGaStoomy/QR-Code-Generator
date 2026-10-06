@@ -2,6 +2,7 @@
 This file contains all the code related directly to the QR Worker (AKA the QR Code generator) and the methods it uses.
 '''
 
+from __future__ import annotations
 from time import perf_counter, sleep
 from typing import Self, Any
 from multiprocessing import Queue

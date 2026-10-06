@@ -2,6 +2,7 @@
 This file contains all the code related to placing modules inside of the QR Code matrix, as well as creating it.
 '''
 
+from __future__ import annotations
 from enum import Enum
 from itertools import product
 from qrdata import getAlignPosList, getFormatString, getVersionString

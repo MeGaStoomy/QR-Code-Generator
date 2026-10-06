@@ -2,6 +2,7 @@
 This file contains code related to the creation of Reed-Solomon error correcting codewords.
 '''
 
+from __future__ import annotations
 from qrdata import ECInfo
 
 class ReedSolomon:

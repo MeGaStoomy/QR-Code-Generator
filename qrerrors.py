@@ -2,6 +2,7 @@
 This file is basically an enum of custom errors that might occur during QR Code generation.
 '''
 
+from __future__ import annotations
 from enum import Enum, auto
 
 class QRError(Enum):

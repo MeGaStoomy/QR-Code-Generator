@@ -2,6 +2,7 @@
 This file contains classes used for communicating between processes during IPC.
 '''
 
+from __future__ import annotations
 from enum import Enum, auto
 from typing import Callable, Any
 from dataclasses import dataclass, field

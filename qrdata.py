@@ -8,6 +8,7 @@ Most of the code was generated using Claude, and using values from
 https://www.thonky.com/qr-code-tutorial/ (licensed under CC BY-NC 4.0), whom I both give credit to.
 '''
 
+from __future__ import annotations
 from typing import NamedTuple
 
 ALPHANUM_CHARS: list[str] = (

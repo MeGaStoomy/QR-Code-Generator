@@ -2,6 +2,7 @@
 This file contains all the code related to finding encoding modes and encoding data using specific modes.
 '''
 
+from __future__ import annotations
 from enum import Enum
 from qrerrors import QRError
 from qrdata import ALPHANUM_CHARS
